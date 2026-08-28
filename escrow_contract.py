@@ -153,6 +153,10 @@ class FreelanceEscrow(gl.Contract):
             raise gl.vm.UserError(
                 "dispute reason cannot be empty"
             )
+          if len(reason) > 2000:
+    raise gl.vm.UserError(
+        "dispute reason is too long"
+    )
 
         job.status = "disputed"
         job.dispute_reason = reason
@@ -176,19 +180,14 @@ class FreelanceEscrow(gl.Contract):
                 return rendered[:6000]
 
             try:
-                content = gl.eq_principle.strict_eq(
-                    fetch_page
-                )
-            except Exception:
-                job.status = "resolved"
-                job.resolution = "client"
-
-                self._pay(
-                    job.client,
-                    job.amount
-                )
-
-                return
+    content = gl.eq_principle.strict_eq(
+        fetch_page
+    )
+except Exception:
+    content = (
+        "[UNABLE TO LOAD URL — "
+        "the submitted webpage could not be retrieved]"
+    )
 
         # ---------- LLM adjudication ----------
 
