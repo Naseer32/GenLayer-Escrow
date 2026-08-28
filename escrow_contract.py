@@ -3,7 +3,7 @@ v0.2.18
 { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }
 
 """
-Freelance Escrow — GenLayer Intelligent Contract
+Freelance Escrow - GenLayer Intelligent Contract
 
 Flow:
 
@@ -52,14 +52,22 @@ def _get_job(self, job_id: u256) -> Job:
 # ---------- Client: post a job ----------
 
 @gl.public.write.payable
-def create_job(self, freelancer: str, requirements: str) -> u256:
+def create_job(
+    self,
+    freelancer: str,
+    requirements: str
+) -> u256:
     amount = gl.message.value
 
     if amount == u256(0):
-        raise gl.vm.UserError("escrow amount must be > 0")
+        raise gl.vm.UserError(
+            "escrow amount must be > 0"
+        )
 
     if not requirements.strip():
-        raise gl.vm.UserError("requirements cannot be empty")
+        raise gl.vm.UserError(
+            "requirements cannot be empty"
+        )
 
     job = Job(
         client=gl.message.sender_address,
@@ -110,7 +118,10 @@ def submit_work(
 # ---------- Client: approve ----------
 
 @gl.public.write
-def approve(self, job_id: u256) -> None:
+def approve(
+    self,
+    job_id: u256
+) -> None:
     job = self._get_job(job_id)
 
     if gl.message.sender_address != job.client:
@@ -126,7 +137,10 @@ def approve(self, job_id: u256) -> None:
     job.status = "resolved"
     job.resolution = "freelancer"
 
-    self._pay(job.freelancer, job.amount)
+    self._pay(
+        job.freelancer,
+        job.amount
+    )
 
 # ---------- Client: dispute ----------
 
@@ -180,8 +194,8 @@ def dispute(
                 return rendered[:6000]
             except Exception:
                 return (
-                    "[UNABLE TO LOAD URL — the submitted "
-                    "webpage could not be retrieved]"
+                    "[UNABLE TO LOAD URL - "
+                    "the submitted webpage could not be retrieved]"
                 )
 
         content = gl.eq_principle.strict_eq(
@@ -191,7 +205,6 @@ def dispute(
     # ---------- LLM adjudication ----------
 
     def leader_fn():
-
         prompt = f"""
 
 You are adjudicating a freelance work dispute.
@@ -244,7 +257,9 @@ The verdict must be exactly one of:
 
         return result
 
-    def validate(leader_result) -> bool:
+    def validate(
+        leader_result
+    ) -> bool:
 
         if not isinstance(
             leader_result,
@@ -312,7 +327,6 @@ def get_job(
     self,
     job_id: u256
 ) -> dict:
-
     job = self._get_job(job_id)
 
     return {
