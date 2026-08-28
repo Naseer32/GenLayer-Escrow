@@ -14,21 +14,31 @@ export default function App() {
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
 
+  // Create job
   const [freelancer, setFreelancer] = useState("");
   const [requirements, setRequirements] = useState("");
   const [amount, setAmount] = useState("1");
 
-  const [jobId, setJobId] = useState("");
+  // Submit work
+  const [submitJobId, setSubmitJobId] = useState("");
   const [deliverable, setDeliverable] = useState("");
   const [isUrl, setIsUrl] = useState(true);
+
+  // Resolve job
+  const [resolveJobId, setResolveJobId] = useState("");
   const [disputeReason, setDisputeReason] = useState("");
+
+  // Lookup
+  const [lookupJobId, setLookupJobId] = useState("");
   const [jobDetails, setJobDetails] = useState(null);
 
   async function handleConnect() {
     try {
       setBusy(true);
       setStatus("Connecting wallet...");
+
       const addr = await connectWallet();
+
       setAddress(addr);
       setStatus("Wallet connected.");
     } catch (err) {
@@ -39,14 +49,20 @@ export default function App() {
   }
 
   async function handleCreateJob() {
-    if (!freelancer.trim() || !requirements.trim()) {
-      setStatus("Enter a freelancer address and job requirements.");
+    if (!freelancer.trim()) {
+      setStatus("Enter the freelancer wallet address.");
+      return;
+    }
+
+    if (!requirements.trim()) {
+      setStatus("Enter the job requirements.");
       return;
     }
 
     try {
       setBusy(true);
       setStatus("Creating job...");
+
       await createJob(
         freelancer.trim(),
         requirements.trim(),
@@ -54,7 +70,10 @@ export default function App() {
       );
 
       const count = await getJobCount();
-      setStatus(`Job created successfully. Total jobs: ${count}`);
+
+      setStatus(
+        `Job created successfully. Total jobs: ${count}.`
+      );
     } catch (err) {
       setStatus("Error: " + err.message);
     } finally {
@@ -63,16 +82,29 @@ export default function App() {
   }
 
   async function handleSubmitWork() {
-    if (!jobId.trim() || !deliverable.trim()) {
-      setStatus("Enter a job ID and deliverable.");
+    if (!submitJobId.trim()) {
+      setStatus("Enter a Job ID for submitting work.");
+      return;
+    }
+
+    if (!deliverable.trim()) {
+      setStatus("Enter the deliverable or webpage URL.");
       return;
     }
 
     try {
       setBusy(true);
-      setStatus("Submitting work...");
-      await submitWork(jobId, deliverable.trim(), isUrl);
-      setStatus(`Work submitted successfully for job ${jobId}.`);
+      setStatus(`Submitting work for Job ${submitJobId}...`);
+
+      await submitWork(
+        submitJobId.trim(),
+        deliverable.trim(),
+        isUrl
+      );
+
+      setStatus(
+        `Work submitted successfully for Job ${submitJobId}.`
+      );
     } catch (err) {
       setStatus("Error: " + err.message);
     } finally {
@@ -81,16 +113,20 @@ export default function App() {
   }
 
   async function handleApprove() {
-    if (!jobId.trim()) {
-      setStatus("Enter a job ID first.");
+    if (!resolveJobId.trim()) {
+      setStatus("Enter a Job ID for approval.");
       return;
     }
 
     try {
       setBusy(true);
-      setStatus("Approving job...");
-      await approveJob(jobId);
-      setStatus(`Job ${jobId} approved. Funds released to freelancer.`);
+      setStatus(`Approving Job ${resolveJobId}...`);
+
+      await approveJob(resolveJobId.trim());
+
+      setStatus(
+        `Job ${resolveJobId} approved. Funds released to freelancer.`
+      );
     } catch (err) {
       setStatus("Error: " + err.message);
     } finally {
@@ -99,26 +135,34 @@ export default function App() {
   }
 
   async function handleDispute() {
-    if (!jobId.trim()) {
-      setStatus("Enter a job ID first.");
+    if (!resolveJobId.trim()) {
+      setStatus("Enter a Job ID for the dispute.");
       return;
     }
 
     if (!disputeReason.trim()) {
-      setStatus("Enter a reason for the dispute.");
+      setStatus("Please enter a reason for the dispute.");
+      return;
+    }
+
+    if (disputeReason.trim().length > 2000) {
+      setStatus("Dispute reason must be 2000 characters or less.");
       return;
     }
 
     try {
       setBusy(true);
       setStatus(
-        "Submitting dispute. GenLayer validators are adjudicating..."
+        "Disputing. GenLayer validators are adjudicating the job..."
       );
 
-      await disputeJob(jobId, disputeReason.trim());
+      await disputeJob(
+        resolveJobId.trim(),
+        disputeReason.trim()
+      );
 
       setStatus(
-        `Job ${jobId} disputed and resolved by the GenLayer adjudication process.`
+        `Job ${resolveJobId} disputed and resolved. Check the job status below.`
       );
     } catch (err) {
       setStatus("Error: " + err.message);
@@ -128,17 +172,19 @@ export default function App() {
   }
 
   async function handleLookup() {
-    if (!jobId.trim()) {
-      setStatus("Enter a job ID first.");
+    if (!lookupJobId.trim()) {
+      setStatus("Enter a Job ID to look up.");
       return;
     }
 
     try {
       setBusy(true);
-      setStatus("Loading job...");
-      const details = await getJob(jobId);
+      setStatus(`Loading Job ${lookupJobId}...`);
+
+      const details = await getJob(lookupJobId.trim());
+
       setJobDetails(details);
-      setStatus(`Loaded job ${jobId}.`);
+      setStatus(`Loaded Job ${lookupJobId}.`);
     } catch (err) {
       setStatus("Error: " + err.message);
     } finally {
@@ -148,265 +194,230 @@ export default function App() {
 
   return (
     <div style={pageStyle}>
-      <main style={containerStyle}>
-        <header style={headerStyle}>
-          <div style={logoStyle}>G</div>
-
-          <div>
-            <h1 style={titleStyle}>GenLayer Escrow</h1>
-            <p style={subtitleStyle}>
-              Freelance escrow with GenLayer-powered dispute resolution.
-            </p>
+      <div style={containerStyle}>
+        <header>
+          <div style={logoRow}>
+            <div style={logo}>G</div>
+            <div>
+              <h1 style={titleStyle}>GenLayer Escrow</h1>
+              <p style={subtitleStyle}>
+                Freelance escrow with GenLayer-powered dispute resolution.
+              </p>
+            </div>
           </div>
         </header>
 
-        <div style={introStyle}>
-          <strong>How it works</strong>
-          <p style={{ margin: "6px 0 0" }}>
+        <section style={infoBox}>
+          <h2 style={infoTitle}>How it works</h2>
+          <p style={infoText}>
             A client locks GEN for a job. The freelancer submits the work.
             The client can approve it directly, or open a dispute for
             GenLayer validators to evaluate the submitted work against the
             requirements.
           </p>
-        </div>
+        </section>
 
-        <section style={walletCardStyle}>
+        <section style={walletBox}>
           {!address ? (
             <>
-              <div>
-                <strong>Wallet not connected</strong>
-                <p style={mutedStyle}>
-                  Connect your wallet to create jobs and interact with escrow.
-                </p>
-              </div>
-
+              <div style={walletStatus}>Wallet not connected</div>
               <button
                 onClick={handleConnect}
                 disabled={busy}
-                style={primaryButtonStyle}
+                style={primaryButton}
               >
-                {busy ? "Connecting..." : "Connect Wallet"}
+                Connect Wallet
               </button>
             </>
           ) : (
-            <div>
-              <strong>Wallet connected</strong>
+            <>
+              <div style={walletStatus}>Wallet connected</div>
               <div style={addressStyle}>{address}</div>
-            </div>
+            </>
           )}
         </section>
 
         {status && (
-          <div style={statusStyle}>
+          <div style={statusBox}>
             {status}
           </div>
         )}
 
-        <section style={cardStyle}>
-          <div style={stepStyle}>1</div>
+        <section style={card}>
+          <div style={stepNumber}>1</div>
+          <h2 style={sectionTitle}>Post a Job</h2>
+          <p style={description}>
+            Create a job and lock GEN in escrow for the assigned freelancer.
+          </p>
 
-          <div style={cardContentStyle}>
-            <h2 style={sectionTitleStyle}>Post a Job</h2>
-            <p style={mutedStyle}>
-              Create a job and lock GEN in escrow for the assigned freelancer.
-            </p>
+          <label style={label}>Freelancer wallet</label>
+          <input
+            style={inputStyle}
+            placeholder="0x..."
+            value={freelancer}
+            onChange={(e) => setFreelancer(e.target.value)}
+          />
 
-            <label style={labelStyle}>Freelancer wallet</label>
+          <label style={label}>Requirements</label>
+          <textarea
+            style={textareaStyle}
+            placeholder="Describe what the freelancer needs to deliver..."
+            value={requirements}
+            onChange={(e) => setRequirements(e.target.value)}
+          />
+
+          <label style={label}>Escrow amount</label>
+          <div style={amountRow}>
             <input
-              style={inputStyle}
-              placeholder="0x..."
-              value={freelancer}
-              onChange={(e) => setFreelancer(e.target.value)}
+              style={amountInput}
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              inputMode="decimal"
             />
-
-            <label style={labelStyle}>Requirements</label>
-            <textarea
-              style={textareaStyle}
-              placeholder="Describe what the freelancer needs to deliver..."
-              value={requirements}
-              onChange={(e) => setRequirements(e.target.value)}
-            />
-
-            <label style={labelStyle}>Escrow amount</label>
-            <div style={amountRowStyle}>
-              <input
-                style={{ ...inputStyle, marginBottom: 0 }}
-                type="number"
-                min="0"
-                step="0.01"
-                placeholder="1"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-              />
-              <span style={genLabelStyle}>GEN</span>
-            </div>
-
-            <button
-              onClick={handleCreateJob}
-              disabled={busy || !address}
-              style={primaryButtonStyle}
-            >
-              {busy ? "Processing..." : "Create Job"}
-            </button>
+            <span style={currency}>GEN</span>
           </div>
+
+          <button
+            onClick={handleCreateJob}
+            disabled={busy || !address}
+            style={primaryButton}
+          >
+            Create Job
+          </button>
         </section>
 
-        <section style={cardStyle}>
-          <div style={stepStyle}>2</div>
+        <section style={card}>
+          <div style={stepNumber}>2</div>
+          <h2 style={sectionTitle}>Submit Work</h2>
+          <p style={description}>
+            The assigned freelancer submits a text deliverable or webpage.
+          </p>
 
-          <div style={cardContentStyle}>
-            <h2 style={sectionTitleStyle}>Submit Work</h2>
-            <p style={mutedStyle}>
-              The assigned freelancer submits a text deliverable or webpage.
-            </p>
+          <label style={label}>Job ID</label>
+          <input
+            style={inputStyle}
+            placeholder="Enter job ID"
+            value={submitJobId}
+            onChange={(e) => setSubmitJobId(e.target.value)}
+            inputMode="numeric"
+          />
 
-            <label style={labelStyle}>Job ID</label>
+          <label style={label}>Deliverable</label>
+          <input
+            style={inputStyle}
+            placeholder="Paste your work or webpage URL..."
+            value={deliverable}
+            onChange={(e) => setDeliverable(e.target.value)}
+          />
+
+          <label style={checkboxLabel}>
             <input
-              style={inputStyle}
-              inputMode="numeric"
-              placeholder="0"
-              value={jobId}
-              onChange={(e) => setJobId(e.target.value)}
+              type="checkbox"
+              checked={isUrl}
+              onChange={(e) => setIsUrl(e.target.checked)}
             />
+            <span>This deliverable is a URL</span>
+          </label>
 
-            <label style={labelStyle}>Deliverable</label>
-            <textarea
-              style={textareaStyle}
-              placeholder="Paste your work or webpage URL..."
-              value={deliverable}
-              onChange={(e) => setDeliverable(e.target.value)}
-            />
-
-            <label style={checkboxLabelStyle}>
-              <input
-                type="checkbox"
-                checked={isUrl}
-                onChange={(e) => setIsUrl(e.target.checked)}
-              />
-              <span>This deliverable is a URL</span>
-            </label>
-
-            <button
-              onClick={handleSubmitWork}
-              disabled={busy || !address}
-              style={primaryButtonStyle}
-            >
-              {busy ? "Processing..." : "Submit Work"}
-            </button>
-          </div>
+          <button
+            onClick={handleSubmitWork}
+            disabled={busy || !address}
+            style={primaryButton}
+          >
+            Submit Work
+          </button>
         </section>
 
-        <section style={cardStyle}>
-          <div style={stepStyle}>3</div>
+        <section style={card}>
+          <div style={stepNumber}>3</div>
+          <h2 style={sectionTitle}>Resolve the Job</h2>
+          <p style={description}>
+            The client can approve the work or submit a dispute.
+          </p>
 
-          <div style={cardContentStyle}>
-            <h2 style={sectionTitleStyle}>Resolve the Job</h2>
-            <p style={mutedStyle}>
-              The client can approve the work or submit a dispute.
-            </p>
+          <label style={label}>Job ID</label>
+          <input
+            style={inputStyle}
+            placeholder="Enter job ID for approval or dispute"
+            value={resolveJobId}
+            onChange={(e) => setResolveJobId(e.target.value)}
+            inputMode="numeric"
+          />
 
-            <label style={labelStyle}>Dispute reason</label>
-            <textarea
-              style={textareaStyle}
-              placeholder="Explain why the submitted work does not satisfy the requirements..."
-              value={disputeReason}
-              onChange={(e) => setDisputeReason(e.target.value)}
-              maxLength={2000}
-            />
+          <label style={label}>Dispute reason</label>
+          <textarea
+            style={textareaStyle}
+            placeholder="Explain why the submitted work does not satisfy the requirements..."
+            value={disputeReason}
+            onChange={(e) => setDisputeReason(e.target.value)}
+            maxLength={2000}
+          />
 
-            <div style={buttonRowStyle}>
-              <button
-                onClick={handleApprove}
-                disabled={busy || !address}
-                style={primaryButtonStyle}
-              >
-                {busy ? "Processing..." : "Approve"}
-              </button>
-
-              <button
-                onClick={handleDispute}
-                disabled={busy || !address}
-                style={dangerButtonStyle}
-              >
-                {busy ? "Processing..." : "Dispute"}
-              </button>
-            </div>
-
-            <div style={infoBoxStyle}>
-              <strong>Dispute resolution</strong>
-              <p style={{ margin: "5px 0 0" }}>
-                GenLayer validators evaluate the job requirements, submitted
-                work, and dispute reason before determining whether the
-                freelancer or client should receive the escrowed GEN.
-              </p>
-            </div>
-          </div>
-        </section>
-
-        <section style={cardStyle}>
-          <div style={stepStyle}>4</div>
-
-          <div style={cardContentStyle}>
-            <h2 style={sectionTitleStyle}>Check Job Status</h2>
-            <p style={mutedStyle}>
-              View the current state and resolution of a job.
-            </p>
-
+          <div style={buttonRow}>
             <button
-              onClick={handleLookup}
+              onClick={handleApprove}
               disabled={busy || !address}
-              style={secondaryButtonStyle}
+              style={primaryButton}
             >
-              Look Up Job {jobId || "?"}
+              Approve
             </button>
 
-            {jobDetails && (
-              <div style={detailsStyle}>
-                <div style={detailRowStyle}>
-                  <span>Status</span>
-                  <strong>{jobDetails.status}</strong>
-                </div>
+            <button
+              onClick={handleDispute}
+              disabled={busy || !address}
+              style={dangerButton}
+            >
+              Dispute
+            </button>
+          </div>
 
-                <div style={detailRowStyle}>
-                  <span>Resolution</span>
-                  <strong>
-                    {jobDetails.resolution || "Pending"}
-                  </strong>
-                </div>
-
-                <div style={detailRowStyle}>
-                  <span>Amount</span>
-                  <strong>
-                    {jobDetails.amount} wei
-                  </strong>
-                </div>
-
-                <div style={detailRowStyle}>
-                  <span>Deliverable</span>
-                  <span style={{ wordBreak: "break-word" }}>
-                    {jobDetails.deliverable || "Not submitted"}
-                  </span>
-                </div>
-
-                <details style={{ marginTop: 12 }}>
-                  <summary style={{ cursor: "pointer", fontSize: 13 }}>
-                    View full job data
-                  </summary>
-
-                  <pre style={preStyle}>
-                    {JSON.stringify(jobDetails, null, 2)}
-                  </pre>
-                </details>
-              </div>
-            )}
+          <div style={disputeInfo}>
+            <strong>Dispute resolution</strong>
+            <p>
+              GenLayer validators evaluate the job requirements, submitted
+              work, and dispute reason before determining whether the
+              freelancer or client should receive the escrowed GEN.
+            </p>
           </div>
         </section>
 
-        <footer style={footerStyle}>
-          <strong>GenLayer Escrow</strong>
-          <span>Intelligent contract powered by GenLayer</span>
+        <section style={card}>
+          <div style={stepNumber}>4</div>
+          <h2 style={sectionTitle}>Check Job Status</h2>
+          <p style={description}>
+            View the current state and resolution of a job.
+          </p>
+
+          <label style={label}>Job ID</label>
+          <input
+            style={inputStyle}
+            placeholder="Enter job ID"
+            value={lookupJobId}
+            onChange={(e) => setLookupJobId(e.target.value)}
+            inputMode="numeric"
+          />
+
+          <button
+            onClick={handleLookup}
+            disabled={busy || !address}
+            style={primaryButton}
+          >
+            Look Up Job
+          </button>
+
+          {jobDetails && (
+            <pre style={resultBox}>
+              {JSON.stringify(jobDetails, null, 2)}
+            </pre>
+          )}
+        </section>
+
+        <footer style={footer}>
+          GenLayer Escrow
+          <br />
+          Intelligent contract powered by GenLayer
         </footer>
-      </main>
+      </div>
     </div>
   );
 }
@@ -414,28 +425,27 @@ export default function App() {
 const pageStyle = {
   minHeight: "100vh",
   background: "#ffffff",
-  color: "#171717",
+  color: "#111827",
   fontFamily:
-    'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-  boxSizing: "border-box",
+    "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
 };
 
 const containerStyle = {
   width: "100%",
-  maxWidth: 720,
+  maxWidth: 560,
   margin: "0 auto",
   padding: "24px 16px 40px",
   boxSizing: "border-box",
 };
 
-const headerStyle = {
+const logoRow = {
   display: "flex",
   alignItems: "center",
   gap: 12,
-  marginBottom: 20,
+  marginBottom: 24,
 };
 
-const logoStyle = {
+const logo = {
   width: 42,
   height: 42,
   borderRadius: 10,
@@ -444,64 +454,85 @@ const logoStyle = {
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  fontWeight: 800,
-  fontSize: 20,
-  flexShrink: 0,
+  fontSize: 22,
+  fontWeight: 700,
 };
 
 const titleStyle = {
   margin: 0,
-  fontSize: 24,
+  fontSize: 22,
   lineHeight: 1.2,
 };
 
 const subtitleStyle = {
-  margin: "4px 0 0",
-  color: "#666",
+  margin: "5px 0 0",
+  color: "#6b7280",
   fontSize: 14,
   lineHeight: 1.5,
 };
 
-const introStyle = {
-  background: "#f8fafc",
+const infoBox = {
   border: "1px solid #e5e7eb",
   borderRadius: 12,
-  padding: 14,
-  marginBottom: 16,
-  fontSize: 13,
-  lineHeight: 1.5,
-};
-
-const walletCardStyle = {
-  border: "1px solid #dbe3ef",
-  borderRadius: 12,
-  padding: 14,
-  marginBottom: 16,
-  display: "flex",
-  flexDirection: "column",
-  gap: 10,
-  background: "#ffffff",
-};
-
-const cardStyle = {
-  border: "1px solid #e5e7eb",
-  borderRadius: 14,
   padding: 16,
   marginBottom: 16,
+  background: "#f9fafb",
+};
+
+const infoTitle = {
+  fontSize: 16,
+  margin: "0 0 6px",
+};
+
+const infoText = {
+  fontSize: 14,
+  lineHeight: 1.6,
+  color: "#4b5563",
+  margin: 0,
+};
+
+const walletBox = {
+  border: "1px solid #e5e7eb",
+  borderRadius: 12,
+  padding: 16,
+  marginBottom: 16,
+};
+
+const walletStatus = {
+  fontSize: 14,
+  fontWeight: 600,
+  marginBottom: 6,
+};
+
+const addressStyle = {
+  fontSize: 12,
+  color: "#4b5563",
+  wordBreak: "break-all",
+  marginBottom: 10,
+};
+
+const statusBox = {
+  background: "#f3f4f6",
+  border: "1px solid #e5e7eb",
+  borderRadius: 10,
+  padding: 12,
+  fontSize: 13,
+  lineHeight: 1.5,
+  marginBottom: 16,
+  wordBreak: "break-word",
+};
+
+const card = {
+  border: "1px solid #e5e7eb",
+  borderRadius: 14,
+  padding: 18,
+  marginBottom: 16,
   background: "#ffffff",
-  display: "flex",
-  gap: 14,
-  boxSizing: "border-box",
 };
 
-const cardContentStyle = {
-  flex: 1,
-  minWidth: 0,
-};
-
-const stepStyle = {
-  width: 30,
-  height: 30,
+const stepNumber = {
+  width: 28,
+  height: 28,
   borderRadius: "50%",
   background: "#eff6ff",
   color: "#2563eb",
@@ -509,26 +540,27 @@ const stepStyle = {
   alignItems: "center",
   justifyContent: "center",
   fontWeight: 700,
-  flexShrink: 0,
+  fontSize: 13,
+  marginBottom: 10,
 };
 
-const sectionTitleStyle = {
-  margin: "2px 0 4px",
+const sectionTitle = {
   fontSize: 18,
+  margin: "0 0 5px",
 };
 
-const mutedStyle = {
-  color: "#666",
+const description = {
+  color: "#6b7280",
   fontSize: 13,
   lineHeight: 1.5,
-  margin: "0 0 12px",
+  margin: "0 0 16px",
 };
 
-const labelStyle = {
+const label = {
   display: "block",
   fontSize: 13,
   fontWeight: 600,
-  margin: "10px 0 5px",
+  marginBottom: 6,
 };
 
 const inputStyle = {
@@ -536,131 +568,111 @@ const inputStyle = {
   width: "100%",
   boxSizing: "border-box",
   padding: "11px 12px",
+  marginBottom: 14,
   borderRadius: 8,
   border: "1px solid #d1d5db",
   fontSize: 14,
-  outline: "none",
   background: "#ffffff",
+  color: "#111827",
 };
 
 const textareaStyle = {
   ...inputStyle,
-  minHeight: 82,
+  minHeight: 90,
   resize: "vertical",
   fontFamily: "inherit",
 };
 
-const amountRowStyle = {
+const amountRow = {
   display: "flex",
   alignItems: "center",
-  gap: 8,
+  border: "1px solid #d1d5db",
+  borderRadius: 8,
+  marginBottom: 14,
+  overflow: "hidden",
 };
 
-const genLabelStyle = {
+const amountInput = {
+  flex: 1,
+  border: "none",
+  outline: "none",
+  padding: "11px 12px",
   fontSize: 14,
-  fontWeight: 700,
-  color: "#555",
+  minWidth: 0,
 };
 
-const checkboxLabelStyle = {
+const currency = {
+  padding: "0 12px",
+  fontSize: 13,
+  fontWeight: 700,
+  color: "#6b7280",
+};
+
+const checkboxLabel = {
   display: "flex",
   alignItems: "center",
-  gap: 7,
+  gap: 8,
   fontSize: 13,
-  margin: "10px 0 2px",
+  marginBottom: 14,
+  color: "#374151",
 };
 
-const buttonRowStyle = {
+const buttonRow = {
   display: "flex",
-  gap: 8,
+  gap: 10,
   flexWrap: "wrap",
 };
 
-const primaryButtonStyle = {
+const primaryButton = {
   background: "#2563eb",
   color: "#ffffff",
   border: "none",
   borderRadius: 8,
-  padding: "11px 15px",
+  padding: "11px 16px",
   fontSize: 14,
   fontWeight: 600,
   cursor: "pointer",
-  marginTop: 10,
-  minHeight: 42,
+  width: "100%",
 };
 
-const secondaryButtonStyle = {
-  ...primaryButtonStyle,
-  background: "#f3f4f6",
-  color: "#111827",
-  border: "1px solid #d1d5db",
-};
-
-const dangerButtonStyle = {
-  ...primaryButtonStyle,
-  background: "#b3261e",
-};
-
-const statusStyle = {
-  background: "#f4f4f4",
-  border: "1px solid #e5e7eb",
-  padding: 10,
+const dangerButton = {
+  background: "#b42318",
+  color: "#ffffff",
+  border: "none",
   borderRadius: 8,
-  fontSize: 13,
-  lineHeight: 1.4,
-  marginBottom: 16,
+  padding: "11px 16px",
+  fontSize: 14,
+  fontWeight: 600,
+  cursor: "pointer",
+  flex: 1,
+  minWidth: 120,
+};
+
+const disputeInfo = {
+  marginTop: 16,
+  padding: 12,
+  borderRadius: 8,
+  background: "#f9fafb",
+  fontSize: 12,
+  lineHeight: 1.5,
+  color: "#4b5563",
+};
+
+const resultBox = {
+  background: "#f3f4f6",
+  borderRadius: 8,
+  padding: 12,
+  marginTop: 14,
+  fontSize: 12,
+  overflowX: "auto",
+  whiteSpace: "pre-wrap",
   wordBreak: "break-word",
 };
 
-const addressStyle = {
-  fontSize: 12,
-  color: "#555",
-  wordBreak: "break-all",
-  marginTop: 5,
-};
-
-const infoBoxStyle = {
-  background: "#f8fafc",
-  border: "1px solid #e2e8f0",
-  borderRadius: 8,
-  padding: 10,
-  marginTop: 14,
-  fontSize: 12,
-  lineHeight: 1.5,
-};
-
-const detailsStyle = {
-  background: "#f8fafc",
-  borderRadius: 10,
-  padding: 12,
-  marginTop: 12,
-  fontSize: 13,
-};
-
-const detailRowStyle = {
-  display: "flex",
-  justifyContent: "space-between",
-  gap: 12,
-  padding: "7px 0",
-  borderBottom: "1px solid #e5e7eb",
-};
-
-const preStyle = {
-  background: "#ffffff",
-  border: "1px solid #e5e7eb",
-  padding: 10,
-  borderRadius: 8,
-  fontSize: 11,
-  overflowX: "auto",
-  marginTop: 10,
-};
-
-const footerStyle = {
-  display: "flex",
-  flexDirection: "column",
-  gap: 3,
+const footer = {
   textAlign: "center",
-  color: "#777",
+  color: "#9ca3af",
   fontSize: 12,
-  paddingTop: 10,
+  lineHeight: 1.6,
+  paddingTop: 12,
 };
