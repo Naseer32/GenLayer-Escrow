@@ -17,6 +17,7 @@ from dataclasses import dataclass
 import json
 
 
+@allow_storage
 @dataclass
 class Job:
     client: Address
@@ -30,8 +31,10 @@ class Job:
 
 
 class FreelanceEscrow(gl.Contract):
+    jobs: DynArray[Job]
+
     def __init__(self):
-        self.jobs: DynArray[Job] = DynArray[Job]()
+        pass
 
     @gl.public.write.payable
     def create_job(self, freelancer: str, requirements: str) -> u256:
