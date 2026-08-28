@@ -3,7 +3,7 @@ import { studionet } from "genlayer-js/chains";
 
 // Change this to your deployed contract address once you deploy
 // outside of Studio (e.g. to a real testnet).
-export const CONTRACT_ADDRESS = "PASTE_YOUR_DEPLOYED_CONTRACT_ADDRESS_HERE";
+export const CONTRACT_ADDRESS = "0xFD92AeB94E0c394951b4e956ef2bc59Cc94B818A";
 
 let client = null;
 let connectedAddress = null;
