@@ -33,8 +33,6 @@ export async function connectWallet() {
   account: connectedAddress,
 });
 
-await client.connect("studionet");
-
   return connectedAddress;
 }
 
