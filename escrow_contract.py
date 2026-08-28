@@ -1,4 +1,3 @@
-
 # v0.2.17
 # { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }
 
@@ -154,11 +153,6 @@ class FreelanceEscrow(gl.Contract):
                 "dispute reason cannot be empty"
             )
 
-        if len(reason) > 2000:
-            raise gl.vm.UserError(
-                "dispute reason is too long"
-            )
-
         job.status = "disputed"
         job.dispute_reason = reason
 
@@ -185,10 +179,15 @@ class FreelanceEscrow(gl.Contract):
                     fetch_page
                 )
             except Exception:
-                content = (
-                    "[UNABLE TO LOAD URL — "
-                    "the submitted webpage could not be retrieved]"
+                job.status = "resolved"
+                job.resolution = "client"
+
+                self._pay(
+                    job.client,
+                    job.amount
                 )
+
+                return
 
         # ---------- LLM adjudication ----------
 
