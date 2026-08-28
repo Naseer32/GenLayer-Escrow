@@ -1,6 +1,3 @@
-# v0.2.16
-# { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }
-
 """
 Freelance Escrow — GenLayer Intelligent Contract
 
@@ -24,10 +21,10 @@ class Job:
     freelancer: Address
     requirements: str
     amount: u256
-    deliverable: str
+    deliverable: str          # text OR url, empty until submitted
     deliverable_is_url: bool
-    status: str
-    resolution: str
+    status: str                # "open" | "submitted" | "approved" | "disputed" | "resolved"
+    resolution: str            # "" | "freelancer" | "client"
 
 
 class FreelanceEscrow(gl.Contract):
@@ -36,6 +33,7 @@ class FreelanceEscrow(gl.Contract):
     def __init__(self):
         pass
 
+    # ---------- Client: post a job ----------
     @gl.public.write.payable
     def create_job(self, freelancer: str, requirements: str) -> u256:
         amount = gl.message.value
@@ -55,8 +53,9 @@ class FreelanceEscrow(gl.Contract):
             resolution="",
         )
         self.jobs.append(job)
-        return u256(len(self.jobs) - 1)
+        return u256(len(self.jobs) - 1)  # job_id
 
+    # ---------- Freelancer: submit work ----------
     @gl.public.write
     def submit_work(self, job_id: u256, deliverable: str, is_url: bool) -> None:
         job = self.jobs[int(job_id)]
@@ -71,6 +70,7 @@ class FreelanceEscrow(gl.Contract):
         job.deliverable_is_url = is_url
         job.status = "submitted"
 
+    # ---------- Client: approve -> auto release ----------
     @gl.public.write
     def approve(self, job_id: u256) -> None:
         job = self.jobs[int(job_id)]
@@ -83,6 +83,7 @@ class FreelanceEscrow(gl.Contract):
         job.resolution = "freelancer"
         self._pay(job.freelancer, job.amount)
 
+    # ---------- Client: dispute -> LLM adjudication ----------
     @gl.public.write
     def dispute(self, job_id: u256) -> None:
         job = self.jobs[int(job_id)]
@@ -100,8 +101,11 @@ class FreelanceEscrow(gl.Contract):
         content = deliverable
         if is_url:
             def fetch_page() -> str:
-                rendered = gl.nondet.web.render(deliverable, mode="text")
-                return rendered[:6000]
+                try:
+                    rendered = gl.nondet.web.render(deliverable, mode="text")
+                    return rendered[:6000]  # keep prompt bounded
+                except Exception:
+                    return "[UNABLE TO LOAD URL — the submitted link did not resolve]"
 
             content = gl.eq_principle.strict_eq(fetch_page)
 
@@ -154,7 +158,9 @@ Respond with ONLY a JSON object, no other text:
         else:
             self._pay(job.client, job.amount)
 
+    # ---------- internal ----------
     def _pay(self, to: Address, amount: u256) -> None:
+        # Payout to an EOA goes through the EVM external-message path
         @gl.evm.contract_interface
         class _Recipient:
             class View:
@@ -164,6 +170,7 @@ Respond with ONLY a JSON object, no other text:
 
         _Recipient(to).emit_transfer(value=amount)
 
+    # ---------- views ----------
     @gl.public.view
     def get_job(self, job_id: u256) -> dict:
         job = self.jobs[int(job_id)]
