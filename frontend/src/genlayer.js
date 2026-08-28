@@ -29,9 +29,11 @@ export async function connectWallet() {
   // Passing just the address string (not a private-key account) tells
   // genlayer-js to route signing through the injected wallet (MetaMask).
   client = createClient({
-    chain: studionet,
-    account: connectedAddress,
-  });
+  chain: studionet,
+  account: connectedAddress,
+});
+
+await client.connect("studionet");
 
   return connectedAddress;
 }
