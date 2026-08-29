@@ -87,6 +87,21 @@ export async function disputeJob(jobId, reason) {
   return c.waitForTransactionReceipt({ hash: txHash, status: "FINALIZED" });
 }
 
+export async function recoverUnavailableJob(jobId, reason) {
+  const c = getClient();
+
+  const txHash = await c.writeContract({
+    address: CONTRACT_ADDRESS,
+    functionName: "recover_unavailable_job",
+    args: [jobId, reason],
+  });
+
+  return c.waitForTransactionReceipt({
+    hash: txHash,
+    status: "FINALIZED",
+  });
+}
+
 export async function getJob(jobId) {
   const c = getClient();
   return c.readContract({
