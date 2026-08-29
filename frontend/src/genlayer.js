@@ -1,10 +1,9 @@
 import { createClient } from "genlayer-js";
 import { studionet } from "genlayer-js/chains";
 
-// Change this to your deployed contract address once you deploy
-// outside of Studio (e.g. to a real testnet).
+// Deployed Freelance Escrow contract
 export const CONTRACT_ADDRESS =
-  "0xa4B5e5a68554e1df0547fd27BF12F9A54908d8BC";
+  "0x3696EB93630c035dC53c1CBcf423262785BCf40A";
 
 let client = null;
 let connectedAddress = null;
@@ -13,87 +12,75 @@ export function getConnectedAddress() {
   return connectedAddress;
 }
 
-// Connects to MetaMask (or any injected EVM wallet) and builds a
-// genlayer-js client that uses that wallet for signing writes.
+// Connect wallet
 export async function connectWallet() {
   if (!window.ethereum) {
-    throw new Error("No injected wallet found. Install MetaMask (or open this page in a wallet browser).");
+    throw new Error(
+      "No injected wallet found. Install MetaMask or open this page in a wallet browser."
+    );
   }
 
-  const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+  const accounts = await window.ethereum.request({
+    method: "eth_requestAccounts",
+  });
+
   if (!accounts || accounts.length === 0) {
     throw new Error("No account returned by wallet.");
   }
 
   connectedAddress = accounts[0];
 
-  // Passing just the address string (not a private-key account) tells
-  // genlayer-js to route signing through the injected wallet (MetaMask).
   client = createClient({
-  chain: studionet,
-  account: connectedAddress,
-});
+    chain: studionet,
+    account: connectedAddress,
+  });
 
   return connectedAddress;
 }
 
 export function getClient() {
   if (!client) {
-    throw new Error("Wallet not connected yet — call connectWallet() first.");
+    throw new Error(
+      "Wallet not connected yet. Call connectWallet() first."
+    );
   }
+
   return client;
 }
 
-// ---- Contract calls ----
+// --------------------------------------------------
+// Contract calls
+// --------------------------------------------------
 
-export async function createJob(freelancerAddress, requirements, amountInGen) {
+export async function createJob(
+  freelancerAddress,
+  requirements,
+  amountInGen
+) {
   const c = getClient();
+
+  if (!freelancerAddress || !freelancerAddress.trim()) {
+    throw new Error("Freelancer address is required.");
+  }
+
+  if (!requirements || !requirements.trim()) {
+    throw new Error("Job requirements are required.");
+  }
+
+  const amount = Number(amountInGen);
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error("Escrow amount must be greater than 0 GEN.");
+  }
+
   const txHash = await c.writeContract({
     address: CONTRACT_ADDRESS,
     functionName: "create_job",
-    args: [freelancerAddress, requirements],
-    value: BigInt(Math.floor(amountInGen * 1e18)), // GEN uses 18 decimals
-  });
-  return c.waitForTransactionReceipt({ hash: txHash, status: "FINALIZED" });
-}
-
-export async function submitWork(jobId, deliverable, isUrl) {
-  const c = getClient();
-  const txHash = await c.writeContract({
-    address: CONTRACT_ADDRESS,
-    functionName: "submit_work",
-    args: [jobId, deliverable, isUrl],
-  });
-  return c.waitForTransactionReceipt({ hash: txHash, status: "FINALIZED" });
-}
-
-export async function approveJob(jobId) {
-  const c = getClient();
-  const txHash = await c.writeContract({
-    address: CONTRACT_ADDRESS,
-    functionName: "approve",
-    args: [jobId],
-  });
-  return c.waitForTransactionReceipt({ hash: txHash, status: "FINALIZED" });
-}
-
-export async function disputeJob(jobId, reason) {
-  const c = getClient();
-  const txHash = await c.writeContract({
-    address: CONTRACT_ADDRESS,
-    functionName: "dispute",
-    args: [jobId, reason],
-  });
-  return c.waitForTransactionReceipt({ hash: txHash, status: "FINALIZED" });
-}
-
-export async function recoverUnavailableJob(jobId, reason) {
-  const c = getClient();
-
-  const txHash = await c.writeContract({
-    address: CONTRACT_ADDRESS,
-    functionName: "recover_unavailable_job",
-    args: [jobId, reason],
+    args: [
+      freelancerAddress.trim(),
+      requirements.trim(),
+    ],
+    value: BigInt(Math.floor(amount * 1e18)),
   });
 
   return c.waitForTransactionReceipt({
@@ -102,8 +89,156 @@ export async function recoverUnavailableJob(jobId, reason) {
   });
 }
 
+export async function submitWork(
+  jobId,
+  deliverable,
+  isUrl
+) {
+  const c = getClient();
+
+  if (!String(jobId).trim()) {
+    throw new Error("Job ID is required.");
+  }
+
+  if (!deliverable || !deliverable.trim()) {
+    throw new Error("Deliverable is required.");
+  }
+
+  const txHash = await c.writeContract({
+    address: CONTRACT_ADDRESS,
+    functionName: "submit_work",
+    args: [
+      jobId,
+      deliverable.trim(),
+      Boolean(isUrl),
+    ],
+  });
+
+  return c.waitForTransactionReceipt({
+    hash: txHash,
+    status: "FINALIZED",
+  });
+}
+
+export async function approveJob(jobId) {
+  const c = getClient();
+
+  if (!String(jobId).trim()) {
+    throw new Error("Job ID is required.");
+  }
+
+  const txHash = await c.writeContract({
+    address: CONTRACT_ADDRESS,
+    functionName: "approve",
+    args: [jobId],
+  });
+
+  return c.waitForTransactionReceipt({
+    hash: txHash,
+    status: "FINALIZED",
+  });
+}
+
+export async function disputeJob(
+  jobId,
+  reason
+) {
+  const c = getClient();
+
+  if (!String(jobId).trim()) {
+    throw new Error("Job ID is required.");
+  }
+
+  if (!reason || !reason.trim()) {
+    throw new Error("Dispute reason is required.");
+  }
+
+  if (reason.trim().length > 2000) {
+    throw new Error(
+      "Dispute reason must be 2000 characters or less."
+    );
+  }
+
+  const txHash = await c.writeContract({
+    address: CONTRACT_ADDRESS,
+    functionName: "dispute",
+    args: [
+      jobId,
+      reason.trim(),
+    ],
+  });
+
+  return c.waitForTransactionReceipt({
+    hash: txHash,
+    status: "FINALIZED",
+  });
+}
+
+export async function recoverUnavailableJob(
+  jobId,
+  reason
+) {
+  const c = getClient();
+
+  if (!String(jobId).trim()) {
+    throw new Error("Job ID is required.");
+  }
+
+  if (!reason || !reason.trim()) {
+    throw new Error("Recovery reason is required.");
+  }
+
+  if (reason.trim().length > 2000) {
+    throw new Error(
+      "Recovery reason must be 2000 characters or less."
+    );
+  }
+
+  const txHash = await c.writeContract({
+    address: CONTRACT_ADDRESS,
+    functionName: "recover_unavailable_job",
+    args: [
+      jobId,
+      reason.trim(),
+    ],
+  });
+
+  return c.waitForTransactionReceipt({
+    hash: txHash,
+    status: "FINALIZED",
+  });
+}
+
+export async function abandonJob(jobId) {
+  const c = getClient();
+
+  if (!String(jobId).trim()) {
+    throw new Error("Job ID is required.");
+  }
+
+  const txHash = await c.writeContract({
+    address: CONTRACT_ADDRESS,
+    functionName: "abandon_job",
+    args: [jobId],
+  });
+
+  return c.waitForTransactionReceipt({
+    hash: txHash,
+    status: "FINALIZED",
+  });
+}
+
+// --------------------------------------------------
+// Read-only calls
+// --------------------------------------------------
+
 export async function getJob(jobId) {
   const c = getClient();
+
+  if (!String(jobId).trim()) {
+    throw new Error("Job ID is required.");
+  }
+
   return c.readContract({
     address: CONTRACT_ADDRESS,
     functionName: "get_job",
@@ -113,6 +248,7 @@ export async function getJob(jobId) {
 
 export async function getJobCount() {
   const c = getClient();
+
   return c.readContract({
     address: CONTRACT_ADDRESS,
     functionName: "job_count",
