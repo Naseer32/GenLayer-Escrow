@@ -3,7 +3,7 @@ import { studionet } from "genlayer-js/chains";
 
 // Deployed Freelance Escrow contract
 export const CONTRACT_ADDRESS =
-  "0x3696EB93630c035dC53c1CBcf423262785BCf40A";
+  "0x39265BBdD4C1f571b066b54bf6A7cE0D0a3D6059";
 
 let client = null;
 let connectedAddress = null;
