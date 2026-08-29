@@ -72,6 +72,7 @@ class FreelanceEscrow(gl.Contract):
             dispute_reason="",
             status="open",
             resolution="",
+            recovery_used=False,
         )
 
         self.jobs.append(job)
