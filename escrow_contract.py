@@ -1,4 +1,4 @@
-# v0.2.17
+# v0.2.18
 # { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }
 
 """
@@ -12,6 +12,8 @@ Flow:
      the submitted work against the requirements
   5. If evidence is unavailable, the job enters recovery
   6. Recovery uses GenLayer consensus to determine the payout
+  7. If a job is abandoned after its deadline, the appropriate
+     party can recover the escrow
 """
 
 from genlayer import *
@@ -32,9 +34,20 @@ class Job:
     resolution: str
     recovery_used: bool
 
+    # Deadline tracking
+    created_at: u256
+    submission_deadline: u256
+    approval_deadline: u256
+
 
 class FreelanceEscrow(gl.Contract):
     jobs: DynArray[Job]
+
+    # 24 hours for freelancer submission
+    SUBMISSION_PERIOD: u256 = u256(86400)
+
+    # 7 days for client review after submission
+    APPROVAL_PERIOD: u256 = u256(604800)
 
     def __init__(self):
         pass
@@ -72,6 +85,8 @@ class FreelanceEscrow(gl.Contract):
                 "requirements cannot be empty"
             )
 
+        created_at = u256(gl.message.timestamp)
+
         job = Job(
             client=gl.message.sender_address,
             freelancer=Address(freelancer),
@@ -83,6 +98,9 @@ class FreelanceEscrow(gl.Contract):
             status="open",
             resolution="",
             recovery_used=False,
+            created_at=created_at,
+            submission_deadline=created_at + self.SUBMISSION_PERIOD,
+            approval_deadline=u256(0),
         )
 
         self.jobs.append(job)
@@ -116,9 +134,19 @@ class FreelanceEscrow(gl.Contract):
                 "deliverable cannot be empty"
             )
 
+        now = u256(gl.message.timestamp)
+
+        if now > job.submission_deadline:
+            raise gl.vm.UserError(
+                "submission deadline has passed"
+            )
+
         job.deliverable = deliverable
         job.deliverable_is_url = is_url
         job.status = "submitted"
+
+        # Start the client review period
+        job.approval_deadline = now + self.APPROVAL_PERIOD
 
     # ---------- Client: approve ----------
 
@@ -189,7 +217,6 @@ class FreelanceEscrow(gl.Contract):
 
             url = deliverable.strip()
 
-            # Basic URL validation
             parts = url.split("/")
 
             if len(parts) < 3:
@@ -526,6 +553,78 @@ The verdict and payout_to fields must agree exactly.
                 job.amount
             )
 
+    # ---------- Abandoned job recovery ----------
+
+    @gl.public.write
+    def abandon_job(
+        self,
+        job_id: u256
+    ) -> None:
+
+        job = self._get_job(job_id)
+
+        now = u256(gl.message.timestamp)
+
+        # Case 1:
+        # Freelancer never submitted work.
+        #
+        # After the submission deadline, the client can reclaim
+        # the escrow.
+
+        if job.status == "open":
+
+            if now <= job.submission_deadline:
+                raise gl.vm.UserError(
+                    "submission deadline has not passed"
+                )
+
+            if gl.message.sender_address != job.client:
+                raise gl.vm.UserError(
+                    "only the client can abandon an unsubmitted job"
+                )
+
+            job.status = "resolved"
+            job.resolution = "client"
+
+            self._pay(
+                job.client,
+                job.amount
+            )
+
+            return
+
+        # Case 2:
+        # Freelancer submitted work but client did nothing.
+        #
+        # After the approval deadline, the freelancer can recover
+        # the escrow.
+
+        if job.status == "submitted":
+
+            if now <= job.approval_deadline:
+                raise gl.vm.UserError(
+                    "approval deadline has not passed"
+                )
+
+            if gl.message.sender_address != job.freelancer:
+                raise gl.vm.UserError(
+                    "only the freelancer can recover an abandoned submitted job"
+                )
+
+            job.status = "resolved"
+            job.resolution = "freelancer"
+
+            self._pay(
+                job.freelancer,
+                job.amount
+            )
+
+            return
+
+        raise gl.vm.UserError(
+            f"job cannot be abandoned (status: {job.status})"
+        )
+
     # ---------- Internal payment ----------
 
     def _pay(
@@ -571,6 +670,12 @@ The verdict and payout_to fields must agree exactly.
             "resolution": job.resolution,
             "recovery_used":
                 job.recovery_used,
+            "created_at":
+                str(job.created_at),
+            "submission_deadline":
+                str(job.submission_deadline),
+            "approval_deadline":
+                str(job.approval_deadline),
         }
 
     @gl.public.view
