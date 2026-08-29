@@ -29,6 +29,7 @@ class Job:
     dispute_reason: str
     status: str
     resolution: str
+    recovery_used: bool
 
 
 class FreelanceEscrow(gl.Contract):
