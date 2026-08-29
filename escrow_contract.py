@@ -161,8 +161,7 @@ class FreelanceEscrow(gl.Contract):
         is_url = job.deliverable_is_url
 
         content = deliverable
-
-        # ---------- Fetch URL through GenLayer ----------
+       # ---------- Fetch URL through GenLayer ----------
 
         if is_url:
 
@@ -179,15 +178,11 @@ class FreelanceEscrow(gl.Contract):
                     fetch_page
                 )
             except Exception:
-                job.status = "resolved"
-                job.resolution = "client"
-
-                self._pay(
-                    job.client,
-                    job.amount
-                )
+                job.status = "evidence_unavailable"
+                job.resolution = "pending"
 
                 return
+        
 
         # ---------- LLM adjudication ----------
 
