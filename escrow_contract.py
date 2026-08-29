@@ -165,9 +165,39 @@ class FreelanceEscrow(gl.Contract):
 
         if is_url:
 
+            url = deliverable.strip()
+
+            # Basic URL validation before calling GenLayer web rendering.
+            if not (
+                url.startswith("https://")
+                or url.startswith("http://")
+            ):
+                job.status = "evidence_unavailable"
+                job.resolution = "pending"
+                return
+
+            # GenLayer web rendering can reject unsupported domains
+            # before a normal Python exception can be recovered from.
+            forbidden_tlds = (
+                ".invalid",
+                ".localhost",
+                ".local",
+                ".test",
+                ".example",
+            )
+
+            if any(
+                url.lower().split("/")[2].endswith(tld)
+                for tld in forbidden_tlds
+                if len(url.split("/")) > 2
+            ):
+                job.status = "evidence_unavailable"
+                job.resolution = "pending"
+                return
+
             def fetch_page() -> str:
                 rendered = gl.nondet.web.render(
-                    deliverable,
+                    url,
                     mode="text"
                 )
 
@@ -180,9 +210,7 @@ class FreelanceEscrow(gl.Contract):
             except Exception:
                 job.status = "evidence_unavailable"
                 job.resolution = "pending"
-
                 return
-        
 
         # ---------- LLM adjudication ----------
 
