@@ -163,6 +163,90 @@ class FreelanceEscrow(gl.Contract):
         is_url = job.deliverable_is_url
 
         content = deliverable
+      # ---------- Client: dispute ----------
+
+    @gl.public.write
+    def dispute(
+        self,
+        job_id: u256,
+        reason: str
+    ) -> None:
+        job = self._get_job(job_id)
+
+        if gl.message.sender_address != job.client:
+            raise gl.vm.UserError(
+                "only the client can dispute"
+            )
+
+        if job.status != "submitted":
+            raise gl.vm.UserError(
+                f"cannot dispute (status: {job.status})"
+            )
+
+        if not reason.strip():
+            raise gl.vm.UserError(
+                "dispute reason cannot be empty"
+            )
+
+        job.status = "disputed"
+        job.dispute_reason = reason
+
+        requirements = job.requirements
+        deliverable = job.deliverable
+        is_url = job.deliverable_is_url
+
+        content = deliverable
+
+        # ---------- Fetch URL through GenLayer ----------
+
+        if is_url:
+
+            url = deliverable.strip()
+
+            parts = url.split("/")
+
+            if len(parts) < 3:
+                job.status = "evidence_unavailable"
+                job.resolution = "pending"
+                return
+
+            hostname = parts[2].lower().split(":")[0]
+
+            forbidden_tlds = (
+                ".invalid",
+                ".localhost",
+                ".local",
+                ".test",
+                ".example",
+            )
+
+            if any(
+                hostname.endswith(tld)
+                for tld in forbidden_tlds
+            ):
+                job.status = "evidence_unavailable"
+                job.resolution = "pending"
+                return
+
+            def fetch_page() -> str:
+                rendered = gl.nondet.web.render(
+                    url,
+                    mode="text"
+                )
+
+                return rendered[:6000]
+
+            try:
+                content = gl.eq_principle.strict_eq(
+                    fetch_page
+                )
+
+            except Exception:
+                job.status = "evidence_unavailable"
+                job.resolution = "pending"
+                return
+
+        # ---------- LLM adjudication ----------
 
       # ---------- Recovery for unavailable evidence ----------
 
