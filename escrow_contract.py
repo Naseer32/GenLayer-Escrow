@@ -130,39 +130,7 @@ class FreelanceEscrow(gl.Contract):
 
         self._pay(job.freelancer, job.amount)
 
-    # ---------- Client: dispute ----------
-
-    @gl.public.write
-    def dispute(
-        self,
-        job_id: u256,
-        reason: str
-    ) -> None:
-        job = self._get_job(job_id)
-
-        if gl.message.sender_address != job.client:
-            raise gl.vm.UserError(
-                "only the client can dispute"
-            )
-
-        if job.status != "submitted":
-            raise gl.vm.UserError(
-                f"cannot dispute (status: {job.status})"
-            )
-
-        if not reason.strip():
-            raise gl.vm.UserError(
-                "dispute reason cannot be empty"
-            )
-
-        job.status = "disputed"
-        job.dispute_reason = reason
-
-        requirements = job.requirements
-        deliverable = job.deliverable
-        is_url = job.deliverable_is_url
-
-        content = deliverable
+    
       # ---------- Client: dispute ----------
 
     @gl.public.write
