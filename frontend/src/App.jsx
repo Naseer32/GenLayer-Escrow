@@ -5,6 +5,7 @@ import {
   submitWork,
   approveJob,
   disputeJob,
+  recoverUnavailableJob,
   getJob,
   getJobCount,
 } from "./genlayer.js";
@@ -24,7 +25,7 @@ export default function App() {
   const [deliverable, setDeliverable] = useState("");
   const [isUrl, setIsUrl] = useState(true);
 
-  // Resolve job
+  // Resolve / dispute / recovery
   const [resolveJobId, setResolveJobId] = useState("");
   const [disputeReason, setDisputeReason] = useState("");
 
@@ -59,6 +60,13 @@ export default function App() {
       return;
     }
 
+    const parsedAmount = parseFloat(amount || "0");
+
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      setStatus("Enter a valid escrow amount.");
+      return;
+    }
+
     try {
       setBusy(true);
       setStatus("Creating job...");
@@ -66,7 +74,7 @@ export default function App() {
       await createJob(
         freelancer.trim(),
         requirements.trim(),
-        parseFloat(amount || "0")
+        parsedAmount
       );
 
       const count = await getJobCount();
@@ -153,7 +161,7 @@ export default function App() {
     try {
       setBusy(true);
       setStatus(
-        "Disputing. GenLayer validators are adjudicating the job..."
+        "Submitting dispute. GenLayer validators are adjudicating the job..."
       );
 
       await disputeJob(
@@ -162,7 +170,44 @@ export default function App() {
       );
 
       setStatus(
-        `Job ${resolveJobId} disputed and resolved. Check the job status below.`
+        `Job ${resolveJobId} dispute submitted. Check the job status below.`
+      );
+    } catch (err) {
+      setStatus("Error: " + err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleRecovery() {
+    if (!resolveJobId.trim()) {
+      setStatus("Enter a Job ID for recovery.");
+      return;
+    }
+
+    if (!disputeReason.trim()) {
+      setStatus("Please enter a recovery reason.");
+      return;
+    }
+
+    if (disputeReason.trim().length > 2000) {
+      setStatus("Recovery reason must be 2000 characters or less.");
+      return;
+    }
+
+    try {
+      setBusy(true);
+      setStatus(
+        "Requesting recovery. GenLayer validators are evaluating the available information..."
+      );
+
+      await recoverUnavailableJob(
+        resolveJobId.trim(),
+        disputeReason.trim()
+      );
+
+      setStatus(
+        `Recovery completed for Job ${resolveJobId}. Check the job status below.`
       );
     } catch (err) {
       setStatus("Error: " + err.message);
@@ -198,8 +243,10 @@ export default function App() {
         <header>
           <div style={logoRow}>
             <div style={logo}>G</div>
+
             <div>
               <h1 style={titleStyle}>GenLayer Escrow</h1>
+
               <p style={subtitleStyle}>
                 Freelance escrow with GenLayer-powered dispute resolution.
               </p>
@@ -209,18 +256,23 @@ export default function App() {
 
         <section style={infoBox}>
           <h2 style={infoTitle}>How it works</h2>
+
           <p style={infoText}>
             A client locks GEN for a job. The freelancer submits the work.
             The client can approve it directly, or open a dispute for
             GenLayer validators to evaluate the submitted work against the
-            requirements.
+            requirements. If the evidence cannot be retrieved, either party
+            can request recovery.
           </p>
         </section>
 
         <section style={walletBox}>
           {!address ? (
             <>
-              <div style={walletStatus}>Wallet not connected</div>
+              <div style={walletStatus}>
+                Wallet not connected
+              </div>
+
               <button
                 onClick={handleConnect}
                 disabled={busy}
@@ -231,8 +283,13 @@ export default function App() {
             </>
           ) : (
             <>
-              <div style={walletStatus}>Wallet connected</div>
-              <div style={addressStyle}>{address}</div>
+              <div style={walletStatus}>
+                Wallet connected
+              </div>
+
+              <div style={addressStyle}>
+                {address}
+              </div>
             </>
           )}
         </section>
@@ -245,12 +302,17 @@ export default function App() {
 
         <section style={card}>
           <div style={stepNumber}>1</div>
+
           <h2 style={sectionTitle}>Post a Job</h2>
+
           <p style={description}>
             Create a job and lock GEN in escrow for the assigned freelancer.
           </p>
 
-          <label style={label}>Freelancer wallet</label>
+          <label style={label}>
+            Freelancer wallet
+          </label>
+
           <input
             style={inputStyle}
             placeholder="0x..."
@@ -258,7 +320,10 @@ export default function App() {
             onChange={(e) => setFreelancer(e.target.value)}
           />
 
-          <label style={label}>Requirements</label>
+          <label style={label}>
+            Requirements
+          </label>
+
           <textarea
             style={textareaStyle}
             placeholder="Describe what the freelancer needs to deliver..."
@@ -266,7 +331,10 @@ export default function App() {
             onChange={(e) => setRequirements(e.target.value)}
           />
 
-          <label style={label}>Escrow amount</label>
+          <label style={label}>
+            Escrow amount
+          </label>
+
           <div style={amountRow}>
             <input
               style={amountInput}
@@ -274,7 +342,10 @@ export default function App() {
               onChange={(e) => setAmount(e.target.value)}
               inputMode="decimal"
             />
-            <span style={currency}>GEN</span>
+
+            <span style={currency}>
+              GEN
+            </span>
           </div>
 
           <button
@@ -288,12 +359,17 @@ export default function App() {
 
         <section style={card}>
           <div style={stepNumber}>2</div>
+
           <h2 style={sectionTitle}>Submit Work</h2>
+
           <p style={description}>
             The assigned freelancer submits a text deliverable or webpage.
           </p>
 
-          <label style={label}>Job ID</label>
+          <label style={label}>
+            Job ID
+          </label>
+
           <input
             style={inputStyle}
             placeholder="Enter job ID"
@@ -302,7 +378,10 @@ export default function App() {
             inputMode="numeric"
           />
 
-          <label style={label}>Deliverable</label>
+          <label style={label}>
+            Deliverable
+          </label>
+
           <input
             style={inputStyle}
             placeholder="Paste your work or webpage URL..."
@@ -316,7 +395,10 @@ export default function App() {
               checked={isUrl}
               onChange={(e) => setIsUrl(e.target.checked)}
             />
-            <span>This deliverable is a URL</span>
+
+            <span>
+              This deliverable is a URL
+            </span>
           </label>
 
           <button
@@ -330,24 +412,35 @@ export default function App() {
 
         <section style={card}>
           <div style={stepNumber}>3</div>
-          <h2 style={sectionTitle}>Resolve the Job</h2>
+
+          <h2 style={sectionTitle}>
+            Resolve the Job
+          </h2>
+
           <p style={description}>
-            The client can approve the work or submit a dispute.
+            The client can approve the work or submit a dispute. If the
+            submitted evidence cannot be retrieved, recovery can be requested.
           </p>
 
-          <label style={label}>Job ID</label>
+          <label style={label}>
+            Job ID
+          </label>
+
           <input
             style={inputStyle}
-            placeholder="Enter job ID for approval or dispute"
+            placeholder="Enter job ID"
             value={resolveJobId}
             onChange={(e) => setResolveJobId(e.target.value)}
             inputMode="numeric"
           />
 
-          <label style={label}>Dispute reason</label>
+          <label style={label}>
+            Dispute or recovery reason
+          </label>
+
           <textarea
             style={textareaStyle}
-            placeholder="Explain why the submitted work does not satisfy the requirements..."
+            placeholder="Explain the dispute or recovery request..."
             value={disputeReason}
             onChange={(e) => setDisputeReason(e.target.value)}
             maxLength={2000}
@@ -369,26 +462,55 @@ export default function App() {
             >
               Dispute
             </button>
+
+            <button
+              onClick={handleRecovery}
+              disabled={busy || !address}
+              style={secondaryButton}
+            >
+              Recover
+            </button>
           </div>
 
           <div style={disputeInfo}>
-            <strong>Dispute resolution</strong>
+            <strong>
+              Dispute resolution
+            </strong>
+
             <p>
               GenLayer validators evaluate the job requirements, submitted
               work, and dispute reason before determining whether the
               freelancer or client should receive the escrowed GEN.
+            </p>
+
+            <strong>
+              Evidence recovery
+            </strong>
+
+            <p>
+              If a submitted URL cannot be retrieved and the job enters
+              evidence_unavailable, either the client or freelancer can
+              request recovery. GenLayer validators then determine which
+              party has the stronger claim based on the available information.
             </p>
           </div>
         </section>
 
         <section style={card}>
           <div style={stepNumber}>4</div>
-          <h2 style={sectionTitle}>Check Job Status</h2>
+
+          <h2 style={sectionTitle}>
+            Check Job Status
+          </h2>
+
           <p style={description}>
             View the current state and resolution of a job.
           </p>
 
-          <label style={label}>Job ID</label>
+          <label style={label}>
+            Job ID
+          </label>
+
           <input
             style={inputStyle}
             placeholder="Enter job ID"
@@ -639,6 +761,19 @@ const dangerButton = {
   background: "#b42318",
   color: "#ffffff",
   border: "none",
+  borderRadius: 8,
+  padding: "11px 16px",
+  fontSize: 14,
+  fontWeight: 600,
+  cursor: "pointer",
+  flex: 1,
+  minWidth: 120,
+};
+
+const secondaryButton = {
+  background: "#ffffff",
+  color: "#374151",
+  border: "1px solid #d1d5db",
   borderRadius: 8,
   padding: "11px 16px",
   fontSize: 14,
