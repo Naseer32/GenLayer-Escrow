@@ -218,16 +218,25 @@ requirements.
 Use the dispute reason as context, but make the final judgment
 based on the actual requirements and submitted work.
 
+The payout decision must directly follow your verdict:
+
+- If the work reasonably satisfies the requirements:
+  verdict = "freelancer"
+  payout_to = "freelancer"
+
+- If the work does not reasonably satisfy the requirements:
+  verdict = "client"
+  payout_to = "client"
+
 Respond with ONLY a JSON object:
 
 {{
   "verdict": "freelancer" or "client",
+  "payout_to": "freelancer" or "client",
   "reasoning": "short explanation"
 }}
 
-The verdict must be exactly one of:
-"freelancer"
-"client"
+The verdict and payout_to fields must agree exactly.
 """
 
             result = gl.nondet.exec_prompt(
@@ -252,14 +261,16 @@ The verdict must be exactly one of:
 
             data = leader_result.calldata
 
+            verdict = data.get("verdict")
+            payout_to = data.get("payout_to")
+            reasoning = data.get("reasoning")
+
             return (
                 isinstance(data, dict)
-                and data.get("verdict")
-                in ("freelancer", "client")
-                and isinstance(
-                    data.get("reasoning"),
-                    str
-                )
+                and verdict in ("freelancer", "client")
+                and payout_to in ("freelancer", "client")
+                and payout_to == verdict
+                and isinstance(reasoning, str)
             )
 
         verdict_data = gl.vm.run_nondet_unsafe(
@@ -268,11 +279,13 @@ The verdict must be exactly one of:
         )
 
         verdict = verdict_data["verdict"]
+        payout_to = verdict_data["payout_to"]
 
+        # Consensus result determines the payout recipient.
         job.status = "resolved"
-        job.resolution = verdict
+        job.resolution = payout_to
 
-        if verdict == "freelancer":
+        if payout_to == "freelancer":
             self._pay(
                 job.freelancer,
                 job.amount
