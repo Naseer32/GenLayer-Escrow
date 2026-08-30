@@ -53,42 +53,71 @@ export default function App() {
   }
 
   async function handleCreateJob() {
-    if (!freelancer.trim()) {
-      setStatus("Enter the freelancer wallet address.");
-      return;
-    }
-
-    if (!requirements.trim()) {
-      setStatus("Enter the job requirements.");
-      return;
-    }
-
-    const parsedAmount = parseFloat(amount || "0");
-
-    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
-      setStatus("Enter a valid escrow amount.");
-      return;
-    }
-
-    try {
-      setBusy(true);
-      setStatus("Submitting job transaction...");
-
-      const result = await createJob(
-        freelancer.trim(),
-        requirements.trim(),
-        parsedAmount
-      );
-
-      setStatus(
-        `Job transaction submitted successfully.\nTransaction: ${result.hash}`
-      );
-    } catch (err) {
-      setStatus("Error: " + (err?.message || String(err)));
-    } finally {
-      setBusy(false);
-    }
+  if (!freelancer.trim()) {
+    setStatus("Enter the freelancer wallet address.");
+    return;
   }
+
+  if (!requirements.trim()) {
+    setStatus("Enter the job requirements.");
+    return;
+  }
+
+  const parsedAmount = parseFloat(amount || "0");
+
+  if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+    setStatus("Enter a valid escrow amount.");
+    return;
+  }
+
+  try {
+    setBusy(true);
+    setStatus("Creating job...");
+
+    const result = await createJob(
+      freelancer.trim(),
+      requirements.trim(),
+      parsedAmount
+    );
+
+    const expectedJobId = result.previousCount;
+
+    setStatus(
+      `Transaction submitted. Waiting for Job ${expectedJobId} to appear...`
+    );
+
+    // Check the contract state without waiting for FINALIZED.
+    for (let attempt = 0; attempt < 20; attempt++) {
+      try {
+        const count = Number(await getJobCount());
+
+        if (count > expectedJobId) {
+          setStatus(
+            `Job ${expectedJobId} created successfully.`
+          );
+          setBusy(false);
+          return;
+        }
+      } catch (readError) {
+        console.log("Job count check:", readError);
+      }
+
+      await new Promise((resolve) =>
+        setTimeout(resolve, 1000)
+      );
+    }
+
+    // Transaction was submitted successfully, but the state
+    // update was slower than expected.
+    setStatus(
+      `Job ${expectedJobId} transaction submitted successfully. The job is still being confirmed.`
+    );
+  } catch (err) {
+    setStatus("Error: " + err.message);
+  } finally {
+    setBusy(false);
+  }
+}
 
   async function handleSubmitWork() {
     if (!submitJobId.trim()) {
