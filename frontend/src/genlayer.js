@@ -49,6 +49,32 @@ export function getClient() {
 }
 
 // --------------------------------------------------
+// Transaction helper
+// --------------------------------------------------
+
+async function sendTransaction({
+  address,
+  functionName,
+  args = [],
+  value,
+}) {
+  const c = getClient();
+
+  const txHash = await c.writeContract({
+    address,
+    functionName,
+    args,
+    ...(value !== undefined ? { value } : {}),
+  });
+
+  // Return immediately after the transaction is accepted by
+  // the wallet/client instead of waiting for FINALIZED.
+  return {
+    hash: txHash,
+  };
+}
+
+// --------------------------------------------------
 // Contract calls
 // --------------------------------------------------
 
@@ -57,8 +83,6 @@ export async function createJob(
   requirements,
   amountInGen
 ) {
-  const c = getClient();
-
   if (!freelancerAddress || !freelancerAddress.trim()) {
     throw new Error("Freelancer address is required.");
   }
@@ -73,7 +97,7 @@ export async function createJob(
     throw new Error("Escrow amount must be greater than 0 GEN.");
   }
 
-  const txHash = await c.writeContract({
+  return sendTransaction({
     address: CONTRACT_ADDRESS,
     functionName: "create_job",
     args: [
@@ -82,11 +106,6 @@ export async function createJob(
     ],
     value: BigInt(Math.floor(amount * 1e18)),
   });
-
-  return c.waitForTransactionReceipt({
-    hash: txHash,
-    status: "FINALIZED",
-  });
 }
 
 export async function submitWork(
@@ -94,8 +113,6 @@ export async function submitWork(
   deliverable,
   isUrl
 ) {
-  const c = getClient();
-
   if (!String(jobId).trim()) {
     throw new Error("Job ID is required.");
   }
@@ -104,7 +121,7 @@ export async function submitWork(
     throw new Error("Deliverable is required.");
   }
 
-  const txHash = await c.writeContract({
+  return sendTransaction({
     address: CONTRACT_ADDRESS,
     functionName: "submit_work",
     args: [
@@ -113,29 +130,17 @@ export async function submitWork(
       Boolean(isUrl),
     ],
   });
-
-  return c.waitForTransactionReceipt({
-    hash: txHash,
-    status: "FINALIZED",
-  });
 }
 
 export async function approveJob(jobId) {
-  const c = getClient();
-
   if (!String(jobId).trim()) {
     throw new Error("Job ID is required.");
   }
 
-  const txHash = await c.writeContract({
+  return sendTransaction({
     address: CONTRACT_ADDRESS,
     functionName: "approve",
     args: [jobId],
-  });
-
-  return c.waitForTransactionReceipt({
-    hash: txHash,
-    status: "FINALIZED",
   });
 }
 
@@ -143,8 +148,6 @@ export async function disputeJob(
   jobId,
   reason
 ) {
-  const c = getClient();
-
   if (!String(jobId).trim()) {
     throw new Error("Job ID is required.");
   }
@@ -159,7 +162,7 @@ export async function disputeJob(
     );
   }
 
-  const txHash = await c.writeContract({
+  return sendTransaction({
     address: CONTRACT_ADDRESS,
     functionName: "dispute",
     args: [
@@ -167,19 +170,12 @@ export async function disputeJob(
       reason.trim(),
     ],
   });
-
-  return c.waitForTransactionReceipt({
-    hash: txHash,
-    status: "FINALIZED",
-  });
 }
 
 export async function recoverUnavailableJob(
   jobId,
   reason
 ) {
-  const c = getClient();
-
   if (!String(jobId).trim()) {
     throw new Error("Job ID is required.");
   }
@@ -194,7 +190,7 @@ export async function recoverUnavailableJob(
     );
   }
 
-  const txHash = await c.writeContract({
+  return sendTransaction({
     address: CONTRACT_ADDRESS,
     functionName: "recover_unavailable_job",
     args: [
@@ -202,29 +198,17 @@ export async function recoverUnavailableJob(
       reason.trim(),
     ],
   });
-
-  return c.waitForTransactionReceipt({
-    hash: txHash,
-    status: "FINALIZED",
-  });
 }
 
 export async function abandonJob(jobId) {
-  const c = getClient();
-
   if (!String(jobId).trim()) {
     throw new Error("Job ID is required.");
   }
 
-  const txHash = await c.writeContract({
+  return sendTransaction({
     address: CONTRACT_ADDRESS,
     functionName: "abandon_job",
     args: [jobId],
-  });
-
-  return c.waitForTransactionReceipt({
-    hash: txHash,
-    status: "FINALIZED",
   });
 }
 
