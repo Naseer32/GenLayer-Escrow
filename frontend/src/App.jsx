@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+
 import {
   connectWallet,
+  restoreWallet,
   createJob,
   submitWork,
   approveJob,
@@ -8,7 +10,10 @@ import {
   recoverUnavailableJob,
   abandonJob,
   getJob,
+  getJobCount,
 } from "./genlayer.js";
+
+const TX_STORAGE_KEY = "genlayer_escrow_transactions";
 
 export default function App() {
   const [address, setAddress] = useState(null);
@@ -36,6 +41,135 @@ export default function App() {
   const [lookupJobId, setLookupJobId] = useState("");
   const [jobDetails, setJobDetails] = useState(null);
 
+  // Persistent transaction history
+  const [transactions, setTransactions] = useState(() => {
+    try {
+      const saved = localStorage.getItem(TX_STORAGE_KEY);
+
+      if (!saved) {
+        return [];
+      }
+
+      const parsed = JSON.parse(saved);
+
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Save transaction history whenever it changes
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        TX_STORAGE_KEY,
+        JSON.stringify(transactions)
+      );
+    } catch (err) {
+      console.error("Could not save transaction history:", err);
+    }
+  }, [transactions]);
+
+  // Restore wallet after page refresh.
+  // restoreWallet uses eth_accounts, so it does not open
+  // the MetaMask permission popup.
+  useEffect(() => {
+    async function restore() {
+      try {
+        const addr = await restoreWallet();
+
+        if (addr) {
+          setAddress(addr);
+          setStatus("Wallet connected.");
+        }
+      } catch (err) {
+        console.error("Wallet restore failed:", err);
+      }
+    }
+
+    restore();
+  }, []);
+
+  // Keep the UI synchronized when the wallet account changes.
+  useEffect(() => {
+    if (!window.ethereum) {
+      return;
+    }
+
+    function handleAccountsChanged(accounts) {
+      if (!accounts || accounts.length === 0) {
+        setAddress(null);
+        setStatus("Wallet disconnected.");
+        return;
+      }
+
+      restoreWallet()
+        .then((addr) => {
+          if (addr) {
+            setAddress(addr);
+            setStatus("Wallet connected.");
+          }
+        })
+        .catch((err) => {
+          console.error("Account restore failed:", err);
+        });
+    }
+
+    window.ethereum.on(
+      "accountsChanged",
+      handleAccountsChanged
+    );
+
+    return () => {
+      window.ethereum.removeListener(
+        "accountsChanged",
+        handleAccountsChanged
+      );
+    };
+  }, []);
+
+  // --------------------------------------------------
+  // Transaction history
+  // --------------------------------------------------
+
+  function saveTransaction({
+    hash,
+    method,
+    jobId = null,
+  }) {
+    if (!hash) {
+      return;
+    }
+
+    setTransactions((previous) => {
+      if (
+        previous.some(
+          (transaction) => transaction.hash === hash
+        )
+      ) {
+        return previous;
+      }
+
+      return [
+        {
+          hash,
+          method,
+          jobId,
+          timestamp: Date.now(),
+        },
+        ...previous,
+      ];
+    });
+  }
+
+  function clearTransactionHistory() {
+    setTransactions([]);
+  }
+
+  // --------------------------------------------------
+  // Wallet
+  // --------------------------------------------------
+
   async function handleConnect() {
     try {
       setBusy(true);
@@ -46,287 +180,437 @@ export default function App() {
       setAddress(addr);
       setStatus("Wallet connected.");
     } catch (err) {
-      setStatus("Connect failed: " + (err?.message || String(err)));
+      setStatus(
+        "Connect failed: " +
+          (err?.message || String(err))
+      );
     } finally {
       setBusy(false);
     }
   }
 
+  // --------------------------------------------------
+  // Create job
+  // --------------------------------------------------
+
   async function handleCreateJob() {
-  if (!freelancer.trim()) {
-    setStatus("Enter the freelancer wallet address.");
-    return;
-  }
-
-  if (!requirements.trim()) {
-    setStatus("Enter the job requirements.");
-    return;
-  }
-
-  const parsedAmount = parseFloat(amount || "0");
-
-  if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
-    setStatus("Enter a valid escrow amount.");
-    return;
-  }
-
-  try {
-    setBusy(true);
-    setStatus("Creating job...");
-
-    const result = await createJob(
-      freelancer.trim(),
-      requirements.trim(),
-      parsedAmount
-    );
-
-    const expectedJobId = result.previousCount;
-
-    setStatus(
-      `Transaction submitted. Waiting for Job ${expectedJobId} to appear...`
-    );
-
-    // Check the contract state without waiting for FINALIZED.
-    for (let attempt = 0; attempt < 20; attempt++) {
-      try {
-        const count = Number(await getJobCount());
-
-        if (count > expectedJobId) {
-          setStatus(
-            `Job ${expectedJobId} created successfully.`
-          );
-          setBusy(false);
-          return;
-        }
-      } catch (readError) {
-        console.log("Job count check:", readError);
-      }
-
-      await new Promise((resolve) =>
-        setTimeout(resolve, 1000)
-      );
+    if (!freelancer.trim()) {
+      setStatus("Enter the freelancer wallet address.");
+      return;
     }
 
-    // Transaction was submitted successfully, but the state
-    // update was slower than expected.
-    setStatus(
-      `Job ${expectedJobId} transaction submitted successfully. The job is still being confirmed.`
-    );
-  } catch (err) {
-    setStatus("Error: " + err.message);
-  } finally {
-    setBusy(false);
+    if (!requirements.trim()) {
+      setStatus("Enter the job requirements.");
+      return;
+    }
+
+    const parsedAmount = parseFloat(amount || "0");
+
+    if (
+      !Number.isFinite(parsedAmount) ||
+      parsedAmount <= 0
+    ) {
+      setStatus("Enter a valid escrow amount.");
+      return;
+    }
+
+    try {
+      setBusy(true);
+      setStatus("Creating job...");
+
+      const result = await createJob(
+        freelancer.trim(),
+        requirements.trim(),
+        parsedAmount
+      );
+
+      const expectedJobId = result.previousCount;
+
+      saveTransaction({
+        hash: result.hash,
+        method: "create_job",
+        jobId: expectedJobId,
+      });
+
+      setStatus(
+        `Transaction submitted. Waiting for Job ${expectedJobId} to appear...`
+      );
+
+      for (let attempt = 0; attempt < 20; attempt++) {
+        try {
+          const count = Number(
+            await getJobCount()
+          );
+
+          if (count > expectedJobId) {
+            setStatus(
+              `Job ${expectedJobId} created successfully.`
+            );
+
+            setBusy(false);
+            return;
+          }
+        } catch (readError) {
+          console.log(
+            "Job count check:",
+            readError
+          );
+        }
+
+        await new Promise((resolve) =>
+          setTimeout(resolve, 1000)
+        );
+      }
+
+      setStatus(
+        `Job ${expectedJobId} transaction submitted successfully. The job is still being confirmed.`
+      );
+    } catch (err) {
+      setStatus(
+        "Error: " +
+          (err?.message || String(err))
+      );
+    } finally {
+      setBusy(false);
+    }
   }
-}
+
+  // --------------------------------------------------
+  // Submit work
+  // --------------------------------------------------
 
   async function handleSubmitWork() {
     if (!submitJobId.trim()) {
-      setStatus("Enter a Job ID for submitting work.");
+      setStatus(
+        "Enter a Job ID for submitting work."
+      );
       return;
     }
 
     if (!deliverable.trim()) {
-      setStatus("Enter the deliverable or webpage URL.");
+      setStatus(
+        "Enter the deliverable or webpage URL."
+      );
       return;
     }
 
     try {
       setBusy(true);
-      setStatus(`Submitting work for Job ${submitJobId}...`);
+
+      setStatus(
+        `Submitting work for Job ${submitJobId}...`
+      );
+
+      const jobId = submitJobId.trim();
 
       const result = await submitWork(
-        submitJobId.trim(),
+        jobId,
         deliverable.trim(),
         isUrl
       );
 
+      saveTransaction({
+        hash: result.hash,
+        method: "submit_work",
+        jobId,
+      });
+
       setStatus(
-        `Work transaction submitted successfully for Job ${submitJobId}.\nTransaction: ${result.hash}`
+        `Work transaction submitted successfully for Job ${jobId}.`
       );
     } catch (err) {
-      setStatus("Error: " + (err?.message || String(err)));
+      setStatus(
+        "Error: " +
+          (err?.message || String(err))
+      );
     } finally {
       setBusy(false);
     }
   }
 
+  // --------------------------------------------------
+  // Approve
+  // --------------------------------------------------
+
   async function handleApprove() {
-  if (!resolveJobId.trim()) {
-    setStatus("Enter a Job ID for approval.");
-    return;
-  }
-
-  try {
-    setBusy(true);
-    setStatus(`Approving Job ${resolveJobId}...`);
-
-    const result = await approveJob(resolveJobId.trim());
-
-    console.log("Approve transaction:", result.hash);
-
-    setStatus(
-      `Approval submitted. Waiting for Job ${resolveJobId} to update...`
-    );
-
-    // Check the contract state without waiting for FINALIZED.
-    for (let attempt = 0; attempt < 20; attempt++) {
-      try {
-        const details = await getJob(resolveJobId.trim());
-
-        const data =
-          typeof details === "string"
-            ? details
-            : JSON.stringify(details);
-
-        const normalized = data.toLowerCase();
-
-        if (
-          normalized.includes("approved") ||
-          normalized.includes("resolved") ||
-          normalized.includes("freelancer")
-        ) {
-          setJobDetails(details);
-
-          setStatus(
-            `Job ${resolveJobId} approved successfully.`
-          );
-
-          setBusy(false);
-          return;
-        }
-      } catch (readError) {
-        console.log("Approval status check:", readError);
-      }
-
-      await new Promise((resolve) =>
-        setTimeout(resolve, 1000)
+    if (!resolveJobId.trim()) {
+      setStatus(
+        "Enter a Job ID for approval."
       );
+      return;
     }
 
-    setStatus(
-      `Job ${resolveJobId} approval transaction submitted successfully. The contract is still updating.`
-    );
-  } catch (err) {
-    setStatus("Error: " + err.message);
-  } finally {
-    setBusy(false);
+    const jobId = resolveJobId.trim();
+
+    try {
+      setBusy(true);
+
+      setStatus(
+        `Approving Job ${jobId}...`
+      );
+
+      const result = await approveJob(jobId);
+
+      saveTransaction({
+        hash: result.hash,
+        method: "approve",
+        jobId,
+      });
+
+      setStatus(
+        `Approval submitted. Waiting for Job ${jobId} to update...`
+      );
+
+      for (let attempt = 0; attempt < 20; attempt++) {
+        try {
+          const details = await getJob(jobId);
+
+          const data =
+            typeof details === "string"
+              ? details
+              : JSON.stringify(details);
+
+          const normalized =
+            data.toLowerCase();
+
+          if (
+            normalized.includes("approved") ||
+            normalized.includes("resolved") ||
+            normalized.includes("freelancer")
+          ) {
+            setJobDetails(details);
+
+            setStatus(
+              `Job ${jobId} approved successfully.`
+            );
+
+            setBusy(false);
+            return;
+          }
+        } catch (readError) {
+          console.log(
+            "Approval status check:",
+            readError
+          );
+        }
+
+        await new Promise((resolve) =>
+          setTimeout(resolve, 1000)
+        );
+      }
+
+      setStatus(
+        `Job ${jobId} approval transaction submitted successfully. The contract is still updating.`
+      );
+    } catch (err) {
+      setStatus(
+        "Error: " +
+          (err?.message || String(err))
+      );
+    } finally {
+      setBusy(false);
+    }
   }
-}
+
+  // --------------------------------------------------
+  // Dispute
+  // --------------------------------------------------
 
   async function handleDispute() {
     if (!resolveJobId.trim()) {
-      setStatus("Enter a Job ID for the dispute.");
+      setStatus(
+        "Enter a Job ID for the dispute."
+      );
       return;
     }
 
     if (!disputeReason.trim()) {
-      setStatus("Please enter a reason for the dispute.");
+      setStatus(
+        "Please enter a reason for the dispute."
+      );
       return;
     }
 
-    if (disputeReason.trim().length > 2000) {
-      setStatus("Dispute reason must be 2000 characters or less.");
+    if (
+      disputeReason.trim().length > 2000
+    ) {
+      setStatus(
+        "Dispute reason must be 2000 characters or less."
+      );
       return;
     }
+
+    const jobId = resolveJobId.trim();
 
     try {
       setBusy(true);
+
       setStatus(
         "Submitting dispute transaction. GenLayer validators will evaluate it..."
       );
 
       const result = await disputeJob(
-        resolveJobId.trim(),
+        jobId,
         disputeReason.trim()
       );
 
+      saveTransaction({
+        hash: result.hash,
+        method: "dispute",
+        jobId,
+      });
+
       setStatus(
-        `Dispute transaction submitted for Job ${resolveJobId}.\nTransaction: ${result.hash}`
+        `Dispute transaction submitted for Job ${jobId}.`
       );
     } catch (err) {
-      setStatus("Error: " + (err?.message || String(err)));
+      setStatus(
+        "Error: " +
+          (err?.message || String(err))
+      );
     } finally {
       setBusy(false);
     }
   }
 
+  // --------------------------------------------------
+  // Recovery
+  // --------------------------------------------------
+
   async function handleRecovery() {
     if (!resolveJobId.trim()) {
-      setStatus("Enter a Job ID for recovery.");
+      setStatus(
+        "Enter a Job ID for recovery."
+      );
       return;
     }
 
     if (!disputeReason.trim()) {
-      setStatus("Please enter a recovery reason.");
+      setStatus(
+        "Please enter a recovery reason."
+      );
       return;
     }
 
-    if (disputeReason.trim().length > 2000) {
-      setStatus("Recovery reason must be 2000 characters or less.");
+    if (
+      disputeReason.trim().length > 2000
+    ) {
+      setStatus(
+        "Recovery reason must be 2000 characters or less."
+      );
       return;
     }
+
+    const jobId = resolveJobId.trim();
 
     try {
       setBusy(true);
+
       setStatus(
         "Submitting recovery transaction. GenLayer validators will evaluate the available evidence..."
       );
 
-      const result = await recoverUnavailableJob(
-        resolveJobId.trim(),
-        disputeReason.trim()
-      );
+      const result =
+        await recoverUnavailableJob(
+          jobId,
+          disputeReason.trim()
+        );
+
+      saveTransaction({
+        hash: result.hash,
+        method: "recover_unavailable_job",
+        jobId,
+      });
 
       setStatus(
-        `Recovery transaction submitted for Job ${resolveJobId}.\nTransaction: ${result.hash}`
+        `Recovery transaction submitted for Job ${jobId}.`
       );
     } catch (err) {
-      setStatus("Error: " + (err?.message || String(err)));
+      setStatus(
+        "Error: " +
+          (err?.message || String(err))
+      );
     } finally {
       setBusy(false);
     }
   }
+
+  // --------------------------------------------------
+  // Abandon
+  // --------------------------------------------------
 
   async function handleAbandon() {
     if (!abandonJobId.trim()) {
-      setStatus("Enter a Job ID to abandon.");
+      setStatus(
+        "Enter a Job ID to abandon."
+      );
       return;
     }
 
+    const jobId = abandonJobId.trim();
+
     try {
       setBusy(true);
+
       setStatus(
-        `Submitting abandoned-job recovery for Job ${abandonJobId}...`
+        `Submitting abandoned-job recovery for Job ${jobId}...`
       );
 
-      const result = await abandonJob(abandonJobId.trim());
+      const result =
+        await abandonJob(jobId);
+
+      saveTransaction({
+        hash: result.hash,
+        method: "abandon_job",
+        jobId,
+      });
 
       setStatus(
-        `Abandoned-job transaction submitted for Job ${abandonJobId}.\nTransaction: ${result.hash}`
+        `Abandoned-job transaction submitted for Job ${jobId}.`
       );
     } catch (err) {
-      setStatus("Error: " + (err?.message || String(err)));
+      setStatus(
+        "Error: " +
+          (err?.message || String(err))
+      );
     } finally {
       setBusy(false);
     }
   }
 
+  // --------------------------------------------------
+  // Lookup
+  // --------------------------------------------------
+
   async function handleLookup() {
     if (!lookupJobId.trim()) {
-      setStatus("Enter a Job ID to look up.");
+      setStatus(
+        "Enter a Job ID to look up."
+      );
       return;
     }
 
+    const jobId = lookupJobId.trim();
+
     try {
       setBusy(true);
-      setStatus(`Loading Job ${lookupJobId}...`);
 
-      const details = await getJob(lookupJobId.trim());
+      setStatus(
+        `Loading Job ${jobId}...`
+      );
+
+      const details = await getJob(jobId);
 
       setJobDetails(details);
-      setStatus(`Loaded Job ${lookupJobId}.`);
+
+      setStatus(
+        `Loaded Job ${jobId}.`
+      );
     } catch (err) {
-      setStatus("Error: " + (err?.message || String(err)));
+      setStatus(
+        "Error: " +
+          (err?.message || String(err))
+      );
     } finally {
       setBusy(false);
     }
@@ -335,12 +619,15 @@ export default function App() {
   return (
     <div style={pageStyle}>
       <div style={containerStyle}>
+
         <header>
           <div style={logoRow}>
             <div style={logo}>G</div>
 
             <div>
-              <h1 style={titleStyle}>GenLayer Escrow</h1>
+              <h1 style={titleStyle}>
+                GenLayer Escrow
+              </h1>
 
               <p style={subtitleStyle}>
                 Freelance escrow with GenLayer-powered dispute resolution.
@@ -350,17 +637,25 @@ export default function App() {
         </header>
 
         <section style={infoBox}>
-          <h2 style={infoTitle}>How it works</h2>
+          <h2 style={infoTitle}>
+            How it works
+          </h2>
 
           <p style={infoText}>
-            A client locks GEN for a job. The freelancer submits the work.
-            The client can approve it directly, or open a dispute for
-            GenLayer validators to evaluate the submitted work against the
-            requirements. If the evidence cannot be retrieved, either party
-            can request recovery. Abandoned jobs can also be recovered after
-            the applicable deadline.
+            A client locks GEN for a job.
+            The freelancer submits the work.
+            The client can approve it directly,
+            or open a dispute for GenLayer
+            validators to evaluate the submitted
+            work against the requirements.
+            If the evidence cannot be retrieved,
+            either party can request recovery.
+            Abandoned jobs can also be recovered
+            after the applicable deadline.
           </p>
         </section>
+
+        {/* Wallet */}
 
         <section style={walletBox}>
           {!address ? (
@@ -396,13 +691,20 @@ export default function App() {
           </div>
         )}
 
-        <section style={card}>
-          <div style={stepNumber}>1</div>
+        {/* Step 1 */}
 
-          <h2 style={sectionTitle}>Post a Job</h2>
+        <section style={card}>
+          <div style={stepNumber}>
+            1
+          </div>
+
+          <h2 style={sectionTitle}>
+            Post a Job
+          </h2>
 
           <p style={description}>
-            Create a job and lock GEN in escrow for the assigned freelancer.
+            Create a job and lock GEN in escrow
+            for the assigned freelancer.
           </p>
 
           <label style={label}>
@@ -413,7 +715,9 @@ export default function App() {
             style={inputStyle}
             placeholder="0x..."
             value={freelancer}
-            onChange={(e) => setFreelancer(e.target.value)}
+            onChange={(e) =>
+              setFreelancer(e.target.value)
+            }
           />
 
           <label style={label}>
@@ -424,7 +728,9 @@ export default function App() {
             style={textareaStyle}
             placeholder="Describe what the freelancer needs to deliver..."
             value={requirements}
-            onChange={(e) => setRequirements(e.target.value)}
+            onChange={(e) =>
+              setRequirements(e.target.value)
+            }
           />
 
           <label style={label}>
@@ -435,7 +741,9 @@ export default function App() {
             <input
               style={amountInput}
               value={amount}
-              onChange={(e) => setAmount(e.target.value)}
+              onChange={(e) =>
+                setAmount(e.target.value)
+              }
               inputMode="decimal"
             />
 
@@ -453,13 +761,20 @@ export default function App() {
           </button>
         </section>
 
-        <section style={card}>
-          <div style={stepNumber}>2</div>
+        {/* Step 2 */}
 
-          <h2 style={sectionTitle}>Submit Work</h2>
+        <section style={card}>
+          <div style={stepNumber}>
+            2
+          </div>
+
+          <h2 style={sectionTitle}>
+            Submit Work
+          </h2>
 
           <p style={description}>
-            The assigned freelancer submits a text deliverable or webpage.
+            The assigned freelancer submits a
+            text deliverable or webpage.
           </p>
 
           <label style={label}>
@@ -470,7 +785,9 @@ export default function App() {
             style={inputStyle}
             placeholder="Enter job ID"
             value={submitJobId}
-            onChange={(e) => setSubmitJobId(e.target.value)}
+            onChange={(e) =>
+              setSubmitJobId(e.target.value)
+            }
             inputMode="numeric"
           />
 
@@ -482,14 +799,18 @@ export default function App() {
             style={inputStyle}
             placeholder="Paste your work or webpage URL..."
             value={deliverable}
-            onChange={(e) => setDeliverable(e.target.value)}
+            onChange={(e) =>
+              setDeliverable(e.target.value)
+            }
           />
 
           <label style={checkboxLabel}>
             <input
               type="checkbox"
               checked={isUrl}
-              onChange={(e) => setIsUrl(e.target.checked)}
+              onChange={(e) =>
+                setIsUrl(e.target.checked)
+              }
             />
 
             <span>
@@ -506,16 +827,22 @@ export default function App() {
           </button>
         </section>
 
+        {/* Step 3 */}
+
         <section style={card}>
-          <div style={stepNumber}>3</div>
+          <div style={stepNumber}>
+            3
+          </div>
 
           <h2 style={sectionTitle}>
             Resolve the Job
           </h2>
 
           <p style={description}>
-            The client can approve the work or submit a dispute. If the
-            submitted evidence cannot be retrieved, recovery can be requested.
+            The client can approve the work or
+            submit a dispute. If the submitted
+            evidence cannot be retrieved,
+            recovery can be requested.
           </p>
 
           <label style={label}>
@@ -526,7 +853,9 @@ export default function App() {
             style={inputStyle}
             placeholder="Enter job ID"
             value={resolveJobId}
-            onChange={(e) => setResolveJobId(e.target.value)}
+            onChange={(e) =>
+              setResolveJobId(e.target.value)
+            }
             inputMode="numeric"
           />
 
@@ -538,7 +867,9 @@ export default function App() {
             style={textareaStyle}
             placeholder="Explain the dispute or recovery request..."
             value={disputeReason}
-            onChange={(e) => setDisputeReason(e.target.value)}
+            onChange={(e) =>
+              setDisputeReason(e.target.value)
+            }
             maxLength={2000}
           />
 
@@ -574,9 +905,11 @@ export default function App() {
             </strong>
 
             <p>
-              GenLayer validators evaluate the job requirements, submitted
-              work, and dispute reason before determining whether the
-              freelancer or client should receive the escrowed GEN.
+              GenLayer validators evaluate the
+              job requirements, submitted work,
+              and dispute reason before determining
+              whether the freelancer or client
+              should receive the escrowed GEN.
             </p>
 
             <strong>
@@ -584,24 +917,30 @@ export default function App() {
             </strong>
 
             <p>
-              If a submitted URL cannot be retrieved and the job enters
-              evidence_unavailable, either the client or freelancer can
-              request recovery. GenLayer validators then determine which
-              party has the stronger claim based on the available information.
+              If a submitted URL cannot be
+              retrieved and the job enters
+              evidence_unavailable, either the
+              client or freelancer can request
+              recovery.
             </p>
           </div>
         </section>
 
+        {/* Step 4 */}
+
         <section style={card}>
-          <div style={stepNumber}>4</div>
+          <div style={stepNumber}>
+            4
+          </div>
 
           <h2 style={sectionTitle}>
             Abandoned Job
           </h2>
 
           <p style={description}>
-            Recover escrow when a job has passed its applicable deadline
-            without the required action.
+            Recover escrow when a job has passed
+            its applicable deadline without the
+            required action.
           </p>
 
           <label style={label}>
@@ -612,7 +951,9 @@ export default function App() {
             style={inputStyle}
             placeholder="Enter job ID"
             value={abandonJobId}
-            onChange={(e) => setAbandonJobId(e.target.value)}
+            onChange={(e) =>
+              setAbandonJobId(e.target.value)
+            }
             inputMode="numeric"
           />
 
@@ -630,27 +971,35 @@ export default function App() {
             </strong>
 
             <p>
-              If the freelancer never submits work before the submission
-              deadline, the client can recover the escrow.
+              If the freelancer never submits
+              work before the submission deadline,
+              the client can recover the escrow.
             </p>
 
             <p>
-              If the freelancer submits work but the client does not approve
-              or dispute it before the approval deadline, the freelancer can
-              recover the escrow.
+              If the freelancer submits work but
+              the client does not approve or
+              dispute it before the approval
+              deadline, the freelancer can recover
+              the escrow.
             </p>
           </div>
         </section>
 
+        {/* Step 5 */}
+
         <section style={card}>
-          <div style={stepNumber}>5</div>
+          <div style={stepNumber}>
+            5
+          </div>
 
           <h2 style={sectionTitle}>
             Check Job Status
           </h2>
 
           <p style={description}>
-            View the current state and resolution of a job.
+            View the current state and resolution
+            of a job.
           </p>
 
           <label style={label}>
@@ -661,7 +1010,9 @@ export default function App() {
             style={inputStyle}
             placeholder="Enter job ID"
             value={lookupJobId}
-            onChange={(e) => setLookupJobId(e.target.value)}
+            onChange={(e) =>
+              setLookupJobId(e.target.value)
+            }
             inputMode="numeric"
           />
 
@@ -675,8 +1026,120 @@ export default function App() {
 
           {jobDetails && (
             <pre style={resultBox}>
-              {JSON.stringify(jobDetails, null, 2)}
+              {JSON.stringify(
+                jobDetails,
+                null,
+                2
+              )}
             </pre>
+          )}
+        </section>
+
+        {/* Step 6 */}
+
+        <section style={card}>
+          <div style={stepNumber}>
+            6
+          </div>
+
+          <h2 style={sectionTitle}>
+            Transaction History
+          </h2>
+
+          <p style={description}>
+            Your transactions remain available
+            after refreshing the page.
+          </p>
+
+          {transactions.length === 0 ? (
+            <div style={emptyHistory}>
+              No transactions yet.
+            </div>
+          ) : (
+            <>
+              <div style={transactionList}>
+                {transactions.map(
+                  (transaction) => (
+                    <a
+                      key={transaction.hash}
+                      href={
+                        "https://explorer-studio.genlayer.com/tx/" +
+                        transaction.hash
+                      }
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={transactionItem}
+                    >
+                      <div
+                        style={
+                          transactionTop
+                        }
+                      >
+                        <strong>
+                          {formatMethod(
+                            transaction.method
+                          )}
+                        </strong>
+
+                        {transaction.jobId !==
+                          null &&
+                          transaction.jobId !==
+                            undefined && (
+                            <span
+                              style={
+                                transactionJob
+                              }
+                            >
+                              Job{" "}
+                              {
+                                transaction.jobId
+                              }
+                            </span>
+                          )}
+                      </div>
+
+                      <div
+                        style={
+                          transactionHash
+                        }
+                      >
+                        {shortHash(
+                          transaction.hash
+                        )}
+                      </div>
+
+                      <div
+                        style={
+                          transactionTime
+                        }
+                      >
+                        {new Date(
+                          transaction.timestamp
+                        ).toLocaleString()}
+                      </div>
+
+                      <div
+                        style={
+                          viewTransaction
+                        }
+                      >
+                        View transaction →
+                      </div>
+                    </a>
+                  )
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={
+                  clearTransactionHistory
+                }
+                style={clearHistoryButton}
+              >
+                Clear local history
+              </button>
+            </>
           )}
         </section>
 
@@ -689,6 +1152,42 @@ export default function App() {
     </div>
   );
 }
+
+// --------------------------------------------------
+// Helpers
+// --------------------------------------------------
+
+function shortHash(hash) {
+  if (!hash) {
+    return "";
+  }
+
+  if (hash.length <= 20) {
+    return hash;
+  }
+
+  return (
+    hash.slice(0, 10) +
+    "..." +
+    hash.slice(-8)
+  );
+}
+
+function formatMethod(method) {
+  if (!method) {
+    return "Transaction";
+  }
+
+  return method
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (letter) =>
+      letter.toUpperCase()
+    );
+}
+
+// --------------------------------------------------
+// Styles
+// --------------------------------------------------
 
 const pageStyle = {
   minHeight: "100vh",
@@ -961,6 +1460,80 @@ const resultBox = {
   overflowX: "auto",
   whiteSpace: "pre-wrap",
   wordBreak: "break-word",
+};
+
+// --------------------------------------------------
+// Transaction history styles
+// --------------------------------------------------
+
+const transactionList = {
+  display: "grid",
+  gap: 10,
+};
+
+const transactionItem = {
+  display: "block",
+  textDecoration: "none",
+  color: "#111827",
+  border: "1px solid #e5e7eb",
+  borderRadius: 10,
+  padding: 14,
+  background: "#f9fafb",
+};
+
+const transactionTop = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 10,
+  marginBottom: 8,
+  fontSize: 13,
+};
+
+const transactionJob = {
+  color: "#6b7280",
+  fontSize: 12,
+};
+
+const transactionHash = {
+  color: "#2563eb",
+  fontSize: 13,
+  fontWeight: 600,
+  wordBreak: "break-all",
+};
+
+const transactionTime = {
+  marginTop: 7,
+  color: "#9ca3af",
+  fontSize: 11,
+};
+
+const viewTransaction = {
+  marginTop: 9,
+  color: "#2563eb",
+  fontSize: 12,
+  fontWeight: 600,
+};
+
+const emptyHistory = {
+  padding: 16,
+  borderRadius: 10,
+  background: "#f9fafb",
+  color: "#6b7280",
+  textAlign: "center",
+  fontSize: 13,
+};
+
+const clearHistoryButton = {
+  marginTop: 12,
+  background: "#ffffff",
+  color: "#6b7280",
+  border: "1px solid #d1d5db",
+  borderRadius: 8,
+  padding: "9px 12px",
+  fontSize: 12,
+  cursor: "pointer",
+  width: "100%",
 };
 
 const footer = {
