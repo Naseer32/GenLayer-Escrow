@@ -233,15 +233,31 @@ export async function recoverUnavailableJob(
   });
 }
 
-export async function abandonJob(jobId) {
+export async function abandonJob(
+  jobId,
+  reason
+) {
   if (!String(jobId).trim()) {
     throw new Error("Job ID is required.");
+  }
+
+  if (!reason || !reason.trim()) {
+    throw new Error("Abandonment reason is required.");
+  }
+
+  if (reason.trim().length > 2000) {
+    throw new Error(
+      "Abandonment reason must be 2000 characters or less."
+    );
   }
 
   return sendTransaction({
     address: CONTRACT_ADDRESS,
     functionName: "abandon_job",
-    args: [jobId],
+    args: [
+      jobId,
+      reason.trim(),
+    ],
   });
 }
 
