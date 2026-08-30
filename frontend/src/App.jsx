@@ -53,6 +53,7 @@ export default function App() {
 
   // Abandon job
   const [abandonJobId, setAbandonJobId] = useState("");
+  const [abandonReason, setAbandonReason] = useState("");
 
   // Lookup
   const [lookupJobId, setLookupJobId] = useState("");
@@ -564,6 +565,22 @@ export default function App() {
       return;
     }
 
+    if (!abandonReason.trim()) {
+      setStatus(
+        "Please enter a reason for the abandonment claim."
+      );
+      return;
+    }
+
+    if (
+      abandonReason.trim().length > 2000
+    ) {
+      setStatus(
+        "Abandonment reason must be 2000 characters or less."
+      );
+      return;
+    }
+
     const jobId = abandonJobId.trim();
 
     try {
@@ -574,7 +591,10 @@ export default function App() {
       );
 
       const result =
-        await abandonJob(jobId);
+        await abandonJob(
+          jobId,
+          abandonReason.trim()
+        );
 
       saveTransaction({
         hash: result.hash,
@@ -972,6 +992,20 @@ export default function App() {
               setAbandonJobId(e.target.value)
             }
             inputMode="numeric"
+          />
+
+          <label style={label}>
+            Reason
+          </label>
+
+          <textarea
+            style={textareaStyle}
+            placeholder="Explain why this job should be treated as abandoned..."
+            value={abandonReason}
+            onChange={(e) =>
+              setAbandonReason(e.target.value)
+            }
+            maxLength={2000}
           />
 
           <button
