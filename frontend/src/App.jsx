@@ -6,6 +6,7 @@ import {
   approveJob,
   disputeJob,
   recoverUnavailableJob,
+  abandonJob,
   getJob,
   getJobCount,
 } from "./genlayer.js";
@@ -25,9 +26,12 @@ export default function App() {
   const [deliverable, setDeliverable] = useState("");
   const [isUrl, setIsUrl] = useState(true);
 
-  // Resolve / dispute / recovery
+  // Resolve / dispute / recovery / abandonment
   const [resolveJobId, setResolveJobId] = useState("");
   const [disputeReason, setDisputeReason] = useState("");
+
+  // Abandon job
+  const [abandonJobId, setAbandonJobId] = useState("");
 
   // Lookup
   const [lookupJobId, setLookupJobId] = useState("");
@@ -71,7 +75,7 @@ export default function App() {
       setBusy(true);
       setStatus("Creating job...");
 
-      await createJob(
+      const receipt = await createJob(
         freelancer.trim(),
         requirements.trim(),
         parsedAmount
@@ -82,6 +86,8 @@ export default function App() {
       setStatus(
         `Job created successfully. Total jobs: ${count}.`
       );
+
+      console.log("Create job receipt:", receipt);
     } catch (err) {
       setStatus("Error: " + err.message);
     } finally {
@@ -170,7 +176,7 @@ export default function App() {
       );
 
       setStatus(
-        `Job ${resolveJobId} dispute submitted. Check the job status below.`
+        `Job ${resolveJobId} dispute completed. Check the job status below.`
       );
     } catch (err) {
       setStatus("Error: " + err.message);
@@ -208,6 +214,30 @@ export default function App() {
 
       setStatus(
         `Recovery completed for Job ${resolveJobId}. Check the job status below.`
+      );
+    } catch (err) {
+      setStatus("Error: " + err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleAbandon() {
+    if (!abandonJobId.trim()) {
+      setStatus("Enter a Job ID to abandon.");
+      return;
+    }
+
+    try {
+      setBusy(true);
+      setStatus(
+        `Checking abandoned-job recovery for Job ${abandonJobId}...`
+      );
+
+      await abandonJob(abandonJobId.trim());
+
+      setStatus(
+        `Job ${abandonJobId} abandoned successfully. Escrow recovered according to the job state.`
       );
     } catch (err) {
       setStatus("Error: " + err.message);
@@ -262,7 +292,8 @@ export default function App() {
             The client can approve it directly, or open a dispute for
             GenLayer validators to evaluate the submitted work against the
             requirements. If the evidence cannot be retrieved, either party
-            can request recovery.
+            can request recovery. Abandoned jobs can also be recovered after
+            the applicable deadline.
           </p>
         </section>
 
@@ -498,6 +529,56 @@ export default function App() {
 
         <section style={card}>
           <div style={stepNumber}>4</div>
+
+          <h2 style={sectionTitle}>
+            Abandoned Job
+          </h2>
+
+          <p style={description}>
+            Recover escrow when a job has passed its applicable deadline
+            without the required action.
+          </p>
+
+          <label style={label}>
+            Job ID
+          </label>
+
+          <input
+            style={inputStyle}
+            placeholder="Enter job ID"
+            value={abandonJobId}
+            onChange={(e) => setAbandonJobId(e.target.value)}
+            inputMode="numeric"
+          />
+
+          <button
+            onClick={handleAbandon}
+            disabled={busy || !address}
+            style={secondaryButtonFull}
+          >
+            Recover Abandoned Job
+          </button>
+
+          <div style={disputeInfo}>
+            <strong>
+              How abandonment works
+            </strong>
+
+            <p>
+              If the freelancer never submits work before the submission
+              deadline, the client can recover the escrow.
+            </p>
+
+            <p>
+              If the freelancer submits work but the client does not approve
+              or dispute it before the approval deadline, the freelancer can
+              recover the escrow.
+            </p>
+          </div>
+        </section>
+
+        <section style={card}>
+          <div style={stepNumber}>5</div>
 
           <h2 style={sectionTitle}>
             Check Job Status
@@ -781,6 +862,18 @@ const secondaryButton = {
   cursor: "pointer",
   flex: 1,
   minWidth: 120,
+};
+
+const secondaryButtonFull = {
+  background: "#ffffff",
+  color: "#374151",
+  border: "1px solid #d1d5db",
+  borderRadius: 8,
+  padding: "11px 16px",
+  fontSize: 14,
+  fontWeight: 600,
+  cursor: "pointer",
+  width: "100%",
 };
 
 const disputeInfo = {
