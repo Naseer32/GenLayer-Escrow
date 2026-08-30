@@ -38,6 +38,29 @@ export async function connectWallet() {
   return connectedAddress;
 }
 
+export async function restoreWallet() {
+  if (!window.ethereum) {
+    return null;
+  }
+
+  const accounts = await window.ethereum.request({
+    method: "eth_accounts",
+  });
+
+  if (!accounts || accounts.length === 0) {
+    return null;
+  }
+
+  connectedAddress = accounts[0];
+
+  client = createClient({
+    chain: studionet,
+    account: connectedAddress,
+  });
+
+  return connectedAddress;
+}
+
 export function getClient() {
   if (!client) {
     throw new Error(
