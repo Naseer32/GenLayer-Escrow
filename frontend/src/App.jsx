@@ -865,9 +865,9 @@ const secondaryButton = {
 };
 
 const secondaryButtonFull = {
-  background: "#ffffff",
-  color: "#374151",
-  border: "1px solid #d1d5db",
+  background: "#f59e0b",
+  color: "#ffffff",
+  border: "none",
   borderRadius: 8,
   padding: "11px 16px",
   fontSize: 14,
