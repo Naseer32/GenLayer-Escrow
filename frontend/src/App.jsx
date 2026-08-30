@@ -20,6 +20,23 @@ export default function App() {
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
 
+  useEffect(() => {
+  async function checkWallet() {
+    try {
+      const address = await restoreWallet();
+
+      if (address) {
+        setAddress(address);
+        setStatus("Wallet connected.");
+      }
+    } catch (error) {
+      console.error("Wallet restore failed:", error);
+    }
+  }
+
+  checkWallet();
+}, []);
+
   // Create job
   const [freelancer, setFreelancer] = useState("");
   const [requirements, setRequirements] = useState("");
