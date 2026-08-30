@@ -83,6 +83,8 @@ export async function createJob(
   requirements,
   amountInGen
 ) {
+  const c = getClient();
+
   if (!freelancerAddress || !freelancerAddress.trim()) {
     throw new Error("Freelancer address is required.");
   }
@@ -97,7 +99,10 @@ export async function createJob(
     throw new Error("Escrow amount must be greater than 0 GEN.");
   }
 
-  return sendTransaction({
+  // Get the current job count before creating the job.
+  const previousCount = Number(await getJobCount());
+
+  const txHash = await c.writeContract({
     address: CONTRACT_ADDRESS,
     functionName: "create_job",
     args: [
@@ -106,6 +111,11 @@ export async function createJob(
     ],
     value: BigInt(Math.floor(amount * 1e18)),
   });
+
+  return {
+    hash: txHash,
+    previousCount,
+  };
 }
 
 export async function submitWork(
