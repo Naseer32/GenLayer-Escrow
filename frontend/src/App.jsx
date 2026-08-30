@@ -151,26 +151,67 @@ export default function App() {
   }
 
   async function handleApprove() {
-    if (!resolveJobId.trim()) {
-      setStatus("Enter a Job ID for approval.");
-      return;
-    }
-
-    try {
-      setBusy(true);
-      setStatus(`Submitting approval for Job ${resolveJobId}...`);
-
-      const result = await approveJob(resolveJobId.trim());
-
-      setStatus(
-        `Approval transaction submitted for Job ${resolveJobId}.\nTransaction: ${result.hash}`
-      );
-    } catch (err) {
-      setStatus("Error: " + (err?.message || String(err)));
-    } finally {
-      setBusy(false);
-    }
+  if (!resolveJobId.trim()) {
+    setStatus("Enter a Job ID for approval.");
+    return;
   }
+
+  try {
+    setBusy(true);
+    setStatus(`Approving Job ${resolveJobId}...`);
+
+    const result = await approveJob(resolveJobId.trim());
+
+    console.log("Approve transaction:", result.hash);
+
+    setStatus(
+      `Approval submitted. Waiting for Job ${resolveJobId} to update...`
+    );
+
+    // Check the contract state without waiting for FINALIZED.
+    for (let attempt = 0; attempt < 20; attempt++) {
+      try {
+        const details = await getJob(resolveJobId.trim());
+
+        const data =
+          typeof details === "string"
+            ? details
+            : JSON.stringify(details);
+
+        const normalized = data.toLowerCase();
+
+        if (
+          normalized.includes("approved") ||
+          normalized.includes("resolved") ||
+          normalized.includes("freelancer")
+        ) {
+          setJobDetails(details);
+
+          setStatus(
+            `Job ${resolveJobId} approved successfully.`
+          );
+
+          setBusy(false);
+          return;
+        }
+      } catch (readError) {
+        console.log("Approval status check:", readError);
+      }
+
+      await new Promise((resolve) =>
+        setTimeout(resolve, 1000)
+      );
+    }
+
+    setStatus(
+      `Job ${resolveJobId} approval transaction submitted successfully. The contract is still updating.`
+    );
+  } catch (err) {
+    setStatus("Error: " + err.message);
+  } finally {
+    setBusy(false);
+  }
+}
 
   async function handleDispute() {
     if (!resolveJobId.trim()) {
