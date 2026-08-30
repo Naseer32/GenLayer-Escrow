@@ -8,7 +8,6 @@ import {
   recoverUnavailableJob,
   abandonJob,
   getJob,
-  getJobCount,
 } from "./genlayer.js";
 
 export default function App() {
@@ -26,7 +25,7 @@ export default function App() {
   const [deliverable, setDeliverable] = useState("");
   const [isUrl, setIsUrl] = useState(true);
 
-  // Resolve / dispute / recovery / abandonment
+  // Resolve / dispute / recovery
   const [resolveJobId, setResolveJobId] = useState("");
   const [disputeReason, setDisputeReason] = useState("");
 
@@ -47,7 +46,7 @@ export default function App() {
       setAddress(addr);
       setStatus("Wallet connected.");
     } catch (err) {
-      setStatus("Connect failed: " + err.message);
+      setStatus("Connect failed: " + (err?.message || String(err)));
     } finally {
       setBusy(false);
     }
@@ -73,23 +72,19 @@ export default function App() {
 
     try {
       setBusy(true);
-      setStatus("Creating job...");
+      setStatus("Submitting job transaction...");
 
-      const receipt = await createJob(
+      const result = await createJob(
         freelancer.trim(),
         requirements.trim(),
         parsedAmount
       );
 
-      const count = await getJobCount();
-
       setStatus(
-        `Job created successfully. Total jobs: ${count}.`
+        `Job transaction submitted successfully.\nTransaction: ${result.hash}`
       );
-
-      console.log("Create job receipt:", receipt);
     } catch (err) {
-      setStatus("Error: " + err.message);
+      setStatus("Error: " + (err?.message || String(err)));
     } finally {
       setBusy(false);
     }
@@ -110,17 +105,17 @@ export default function App() {
       setBusy(true);
       setStatus(`Submitting work for Job ${submitJobId}...`);
 
-      await submitWork(
+      const result = await submitWork(
         submitJobId.trim(),
         deliverable.trim(),
         isUrl
       );
 
       setStatus(
-        `Work submitted successfully for Job ${submitJobId}.`
+        `Work transaction submitted successfully for Job ${submitJobId}.\nTransaction: ${result.hash}`
       );
     } catch (err) {
-      setStatus("Error: " + err.message);
+      setStatus("Error: " + (err?.message || String(err)));
     } finally {
       setBusy(false);
     }
@@ -134,15 +129,15 @@ export default function App() {
 
     try {
       setBusy(true);
-      setStatus(`Approving Job ${resolveJobId}...`);
+      setStatus(`Submitting approval for Job ${resolveJobId}...`);
 
-      await approveJob(resolveJobId.trim());
+      const result = await approveJob(resolveJobId.trim());
 
       setStatus(
-        `Job ${resolveJobId} approved. Funds released to freelancer.`
+        `Approval transaction submitted for Job ${resolveJobId}.\nTransaction: ${result.hash}`
       );
     } catch (err) {
-      setStatus("Error: " + err.message);
+      setStatus("Error: " + (err?.message || String(err)));
     } finally {
       setBusy(false);
     }
@@ -167,19 +162,19 @@ export default function App() {
     try {
       setBusy(true);
       setStatus(
-        "Submitting dispute. GenLayer validators are adjudicating the job..."
+        "Submitting dispute transaction. GenLayer validators will evaluate it..."
       );
 
-      await disputeJob(
+      const result = await disputeJob(
         resolveJobId.trim(),
         disputeReason.trim()
       );
 
       setStatus(
-        `Job ${resolveJobId} dispute completed. Check the job status below.`
+        `Dispute transaction submitted for Job ${resolveJobId}.\nTransaction: ${result.hash}`
       );
     } catch (err) {
-      setStatus("Error: " + err.message);
+      setStatus("Error: " + (err?.message || String(err)));
     } finally {
       setBusy(false);
     }
@@ -204,19 +199,19 @@ export default function App() {
     try {
       setBusy(true);
       setStatus(
-        "Requesting recovery. GenLayer validators are evaluating the available information..."
+        "Submitting recovery transaction. GenLayer validators will evaluate the available evidence..."
       );
 
-      await recoverUnavailableJob(
+      const result = await recoverUnavailableJob(
         resolveJobId.trim(),
         disputeReason.trim()
       );
 
       setStatus(
-        `Recovery completed for Job ${resolveJobId}. Check the job status below.`
+        `Recovery transaction submitted for Job ${resolveJobId}.\nTransaction: ${result.hash}`
       );
     } catch (err) {
-      setStatus("Error: " + err.message);
+      setStatus("Error: " + (err?.message || String(err)));
     } finally {
       setBusy(false);
     }
@@ -231,16 +226,16 @@ export default function App() {
     try {
       setBusy(true);
       setStatus(
-        `Checking abandoned-job recovery for Job ${abandonJobId}...`
+        `Submitting abandoned-job recovery for Job ${abandonJobId}...`
       );
 
-      await abandonJob(abandonJobId.trim());
+      const result = await abandonJob(abandonJobId.trim());
 
       setStatus(
-        `Job ${abandonJobId} abandoned successfully. Escrow recovered according to the job state.`
+        `Abandoned-job transaction submitted for Job ${abandonJobId}.\nTransaction: ${result.hash}`
       );
     } catch (err) {
-      setStatus("Error: " + err.message);
+      setStatus("Error: " + (err?.message || String(err)));
     } finally {
       setBusy(false);
     }
@@ -261,7 +256,7 @@ export default function App() {
       setJobDetails(details);
       setStatus(`Loaded Job ${lookupJobId}.`);
     } catch (err) {
-      setStatus("Error: " + err.message);
+      setStatus("Error: " + (err?.message || String(err)));
     } finally {
       setBusy(false);
     }
@@ -722,6 +717,7 @@ const statusBox = {
   fontSize: 13,
   lineHeight: 1.5,
   marginBottom: 16,
+  whiteSpace: "pre-wrap",
   wordBreak: "break-word",
 };
 
