@@ -35,7 +35,8 @@ from dataclasses import dataclass
 import datetime
 
 
-ABANDONMENT_PERIOD = datetime.timedelta(days=7)
+ABANDONMENT_PERIOD = datetime.timedelta(minutes=2)  # TEMP: revert to days=7 before final resubmission
+
 
 
 @allow_storage
