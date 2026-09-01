@@ -1,4 +1,4 @@
-# v0.3.0
+# v0.4.0
 # { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }
 
 """
@@ -28,16 +28,41 @@ Changes from v0.2.21 (steward-requested fixes):
   - abandon_job had no time threshold, so it could be called
     immediately after job creation. Fixed: added created_at /
     submitted_at timestamps and ABANDONMENT_PERIOD gate.
+
+Changes from v0.3.0 (steward-requested fix):
+  - validate_fetch only compared an "available" boolean between
+    validators, never the actual fetched content. Two validators
+    could fetch different content from a dynamic page, both
+    report available=True, and vote "agree" without ever having
+    reviewed the same evidence — the verdict consensus was real,
+    but the evidence consensus underneath it wasn't. Fixed:
+    submit_work now pins a canonical content digest (SHA-256) at
+    submission time via independent validator consensus, and
+    dispute() requires both (a) validators agree on the
+    dispute-time content digest, not just availability, and
+    (b) that digest matches the one pinned at submission. If the
+    content has drifted since submission, the job routes to
+    evidence_unavailable rather than being adjudicated on
+    content nobody agreed was the original deliverable.
 """
 
 from genlayer import *
 from dataclasses import dataclass
 import datetime
+import hashlib
 
 
 ABANDONMENT_PERIOD = datetime.timedelta(days=7)
 
 
+def _digest(content: str) -> str:
+    """
+    Canonical digest of fetched content, used to pin a URL
+    deliverable to a stable snapshot and let validators verify
+    they are judging the same evidence, not just that a fetch
+    happened to succeed for each of them independently.
+    """
+    return hashlib.sha256(content.encode("utf-8")).hexdigest()
 
 
 @allow_storage
@@ -49,6 +74,7 @@ class Job:
     amount: u256
     deliverable: str
     deliverable_is_url: bool
+    deliverable_digest: str
     dispute_reason: str
     status: str
     resolution: str
@@ -221,6 +247,7 @@ class FreelanceEscrow(gl.Contract):
             amount=amount,
             deliverable="",
             deliverable_is_url=False,
+            deliverable_digest="",
             dispute_reason="",
             status="open",
             resolution="",
@@ -260,8 +287,105 @@ class FreelanceEscrow(gl.Contract):
                 "deliverable cannot be empty"
             )
 
+        digest = ""
+
+        if is_url:
+
+            # Pin a canonical content snapshot at submission
+            # time. Each validator independently fetches the URL
+            # and must agree on the SAME content digest as the
+            # leader — not just that a fetch succeeded. This
+            # digest becomes the reference point disputes are
+            # checked against later.
+            url = deliverable.strip()
+
+            def fetch_and_digest():
+
+                try:
+
+                    rendered = gl.nondet.web.render(
+                        url,
+                        mode="text"
+                    )
+
+                    content = rendered[:6000]
+
+                    return {
+                        "available": True,
+                        "digest": _digest(content),
+                    }
+
+                except Exception:
+
+                    return {
+                        "available": False,
+                        "digest": "",
+                    }
+
+            def validate_snapshot(
+                leader_result
+            ) -> bool:
+
+                if not isinstance(
+                    leader_result,
+                    gl.vm.Return
+                ):
+                    return False
+
+                data = leader_result.calldata
+
+                if not isinstance(data, dict):
+                    return False
+
+                leader_available = data.get(
+                    "available"
+                )
+                leader_digest = data.get(
+                    "digest"
+                )
+
+                if not isinstance(
+                    leader_available,
+                    bool
+                ):
+                    return False
+
+                try:
+
+                    own_result = fetch_and_digest()
+
+                except Exception:
+
+                    return leader_available is False
+
+                if not isinstance(
+                    own_result,
+                    dict
+                ):
+                    return False
+
+                return (
+                    own_result.get("available")
+                    == leader_available
+                    and own_result.get("digest")
+                    == leader_digest
+                )
+
+            snapshot = gl.vm.run_nondet_unsafe(
+                fetch_and_digest,
+                validate_snapshot
+            )
+
+            if snapshot["available"]:
+                digest = snapshot["digest"]
+
+            # If the URL isn't reachable at submission time,
+            # digest stays "" and the dispute path will route
+            # such a job to evidence_unavailable when checked.
+
         job.deliverable = deliverable
         job.deliverable_is_url = is_url
+        job.deliverable_digest = digest
         job.status = "submitted"
         job.submitted_at = datetime.datetime.now()
 
@@ -373,9 +497,12 @@ class FreelanceEscrow(gl.Contract):
                         mode="text"
                     )
 
+                    content = rendered[:6000]
+
                     return {
                         "available": True,
-                        "content": rendered[:6000],
+                        "content": content,
+                        "digest": _digest(content),
                     }
 
                 except Exception:
@@ -383,6 +510,7 @@ class FreelanceEscrow(gl.Contract):
                     return {
                         "available": False,
                         "content": "",
+                        "digest": "",
                     }
 
             def validate_fetch(
@@ -402,6 +530,9 @@ class FreelanceEscrow(gl.Contract):
 
                 leader_available = data.get(
                     "available"
+                )
+                leader_digest = data.get(
+                    "digest"
                 )
 
                 if not isinstance(
@@ -424,17 +555,17 @@ class FreelanceEscrow(gl.Contract):
                 ):
                     return False
 
-                own_available = own_result.get(
-                    "available"
-                )
-
+                # Validators must agree on the CONTENT digest,
+                # not just that a fetch succeeded. This closes
+                # the gap where two validators could each fetch
+                # different content from a dynamic page, both
+                # report "available", and vote "agree" without
+                # ever having reviewed the same evidence.
                 return (
-                    isinstance(
-                        own_available,
-                        bool
-                    )
-                    and own_available
+                    own_result.get("available")
                     == leader_available
+                    and own_result.get("digest")
+                    == leader_digest
                 )
 
             fetch_result = gl.vm.run_nondet_unsafe(
@@ -443,6 +574,24 @@ class FreelanceEscrow(gl.Contract):
             )
 
             if not fetch_result["available"]:
+
+                job.status = "evidence_unavailable"
+                job.dispute_reason = reason
+                job.resolution = "pending"
+
+                return
+
+            # Check the dispute-time content against the
+            # canonical snapshot pinned at submission. If the
+            # page has changed since submission, the original
+            # evidence is gone — route to recovery rather than
+            # adjudicate on content the freelancer never agreed
+            # to be judged on.
+            if (
+                job.deliverable_digest
+                and fetch_result["digest"]
+                != job.deliverable_digest
+            ):
 
                 job.status = "evidence_unavailable"
                 job.dispute_reason = reason
@@ -755,6 +904,8 @@ Respond with ONLY a JSON object:
             "deliverable": job.deliverable,
             "deliverable_is_url":
                 job.deliverable_is_url,
+            "deliverable_digest":
+                job.deliverable_digest,
             "dispute_reason":
                 job.dispute_reason,
             "status": job.status,
