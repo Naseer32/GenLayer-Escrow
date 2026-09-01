@@ -667,8 +667,11 @@ export default function App() {
               </h1>
 
               <p style={subtitleStyle}>
-  Freelance escrow with GenLayer-powered dispute resolution.
-</p>
+                Escrow secured by independent on-chain arbitration.
+              </p>
+            </div>
+          </div>
+        </header>
 
         <section style={infoBox}>
           <h2 style={infoTitle}>
@@ -688,8 +691,6 @@ export default function App() {
             after the applicable deadline.
           </p>
         </section>
-
-        {/* Wallet */}
 
         <section style={walletBox}>
           {!address ? (
