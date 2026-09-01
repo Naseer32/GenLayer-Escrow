@@ -667,11 +667,8 @@ export default function App() {
               </h1>
 
               <p style={subtitleStyle}>
-                Freelance escrow with GenLayer-powered dispute resolution.
-              </p>
-            </div>
-          </div>
-        </header>
+  Freelance escrow with GenLayer-powered dispute resolution.
+</p>
 
         <section style={infoBox}>
           <h2 style={infoTitle}>
