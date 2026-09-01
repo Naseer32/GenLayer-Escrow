@@ -692,6 +692,8 @@ export default function App() {
           </p>
         </section>
 
+        {/* Wallet */}
+
         <section style={walletBox}>
           {!address ? (
             <>
