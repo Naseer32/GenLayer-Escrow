@@ -1,4 +1,4 @@
-# v0.4.0
+# v0.4.1
 # { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }
 
 """
@@ -16,34 +16,14 @@ Flow:
   7. If a job sits unactioned past ABANDONMENT_PERIOD, either party
      can request abandonment recovery and consensus determines payout
 
-Changes from v0.2.21 (steward-requested fixes):
-  - validate() for adjudication used to only check that a single LLM
-    call's own "verdict" and "payout_to" fields matched each other —
-    that's not independent judgment, it's one call checked against
-    itself. Fixed: validators now independently re-run the same
-    adjudication prompt and consensus requires their verdicts to
-    match (same pattern the URL-fetch step already used correctly
-    via validate_fetch). payout_to is no longer an LLM output at
-    all — it's derived in code from the agreed verdict.
-  - abandon_job had no time threshold, so it could be called
-    immediately after job creation. Fixed: added created_at /
-    submitted_at timestamps and ABANDONMENT_PERIOD gate.
-
-Changes from v0.3.0 (steward-requested fix):
-  - validate_fetch only compared an "available" boolean between
-    validators, never the actual fetched content. Two validators
-    could fetch different content from a dynamic page, both
-    report available=True, and vote "agree" without ever having
-    reviewed the same evidence — the verdict consensus was real,
-    but the evidence consensus underneath it wasn't. Fixed:
-    submit_work now pins a canonical content digest (SHA-256) at
-    submission time via independent validator consensus, and
-    dispute() requires both (a) validators agree on the
-    dispute-time content digest, not just availability, and
-    (b) that digest matches the one pinned at submission. If the
-    content has drifted since submission, the job routes to
-    evidence_unavailable rather than being adjudicated on
-    content nobody agreed was the original deliverable.
+Changes from v0.4.0 (steward-requested fix):
+  - dispute() now treats an empty deliverable_digest on a URL job as
+    a hard failure: if the URL was unreachable at submission time,
+    no canonical snapshot exists, so the job is routed to
+    evidence_unavailable rather than allowing adjudication on
+    dispute-time content that was never pinned.
+  - _pay() switched from emit_transfer (not a value-transfer API)
+    to gl.transfer(), the documented native GEN transfer function.
 """
 
 from genlayer import *
@@ -581,17 +561,24 @@ class FreelanceEscrow(gl.Contract):
 
                 return
 
-            # Check the dispute-time content against the
-            # canonical snapshot pinned at submission. If the
-            # page has changed since submission, the original
-            # evidence is gone — route to recovery rather than
-            # adjudicate on content the freelancer never agreed
-            # to be judged on.
-            if (
-                job.deliverable_digest
-                and fetch_result["digest"]
-                != job.deliverable_digest
-            ):
+            # If no digest was pinned at submission time, the URL
+            # was unreachable then. Without a submission-time
+            # snapshot we have no canonical baseline to compare
+            # against, so the only safe path is recovery.
+            if not job.deliverable_digest:
+
+                job.status = "evidence_unavailable"
+                job.dispute_reason = reason
+                job.resolution = "pending"
+
+                return
+
+            # Check the dispute-time content against the canonical
+            # snapshot pinned at submission. If the page has changed
+            # since submission, the original evidence is gone — route
+            # to recovery rather than adjudicate on content nobody
+            # agreed was the original deliverable.
+            if fetch_result["digest"] != job.deliverable_digest:
 
                 job.status = "evidence_unavailable"
                 job.dispute_reason = reason
@@ -872,19 +859,7 @@ Respond with ONLY a JSON object:
         to: Address,
         amount: u256
     ) -> None:
-
-        @gl.evm.contract_interface
-        class _Recipient:
-
-            class View:
-                pass
-
-            class Write:
-                pass
-
-        _Recipient(to).emit_transfer(
-            value=amount
-        )
+        gl.transfer(to, amount)
 
     # ---------- Views ----------
 
