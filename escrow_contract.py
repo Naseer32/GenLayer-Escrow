@@ -22,13 +22,9 @@ Changes from v0.4.0 (steward-requested fix):
     no canonical snapshot exists, so the job is routed to
     evidence_unavailable rather than allowing adjudication on
     dispute-time content that was never pinned.
-  - _pay() switched from emit_transfer via broken contract_interface
-    pattern to gl.contract.get_at().emit_transfer(), the correct
-    GenLayer native GEN transfer API.
 """
 
 from genlayer import *
-from genlayer.contract import get_at
 from dataclasses import dataclass
 import datetime
 import hashlib
@@ -861,7 +857,19 @@ Respond with ONLY a JSON object:
         to: Address,
         amount: u256
     ) -> None:
-        get_at(to).emit_transfer(amount)
+
+        @gl.evm.contract_interface
+        class _Recipient:
+
+            class View:
+                pass
+
+            class Write:
+                pass
+
+        _Recipient(to).emit_transfer(
+            value=amount
+        )
 
     # ---------- Views ----------
 
