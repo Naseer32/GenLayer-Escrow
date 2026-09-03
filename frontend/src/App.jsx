@@ -401,6 +401,11 @@ export default function App() {
     }
   });
 
+  const visibleTransactions = useMemo(() => {
+    if (!address) return [];
+    return transactions.filter((tx) => tx.address === address);
+  }, [transactions, address]);
+
   /* --------------------------------------------------
      Status helpers
   -------------------------------------------------- */
@@ -555,68 +560,69 @@ return () => {
   -------------------------------------------------- */
 
   function saveTransaction({ hash, method, jobId }) {
-  if (!hash || !address) return; // Don't save if no wallet is connected
+    if (!hash || !address) return; // Don't save if no wallet is connected
 
-  setTransactions((current) => {
-    const exists = current.some(
-      (transaction) => transaction.hash === hash
-    );
-
-    if (exists) {
-      return current;
-    }
-
-    const next = [
-      {
-        hash,
-        method,
-        jobId:
-          jobId !== undefined && jobId !== null
-            ? String(jobId)
-            : "",
-        address, // <-- tag with current wallet
-        timestamp: new Date().toISOString(),
-      },
-      ...current,
-    ];
-
-    try {
-      localStorage.setItem(
-        TX_STORAGE_KEY,
-        JSON.stringify(next)
+    setTransactions((current) => {
+      const exists = current.some(
+        (transaction) => transaction.hash === hash
       );
-    } catch {
-      // Local storage failure should not break the app.
-    }
 
-    return next;
-  });
-        }
-  function clearTransactionHistory() {
-  if (!address) return;
-
-  setTransactions((current) => {
-    const next = current.filter(
-      (tx) => tx.address !== address
-    );
-
-    try {
-      localStorage.setItem(
-        TX_STORAGE_KEY,
-        JSON.stringify(next)
-      );
-    } catch {
-      // Ignore local storage errors.
-    }
-
-    return next;
-  });
-
-  showStatus(
-    "Transaction history cleared for this wallet.",
-    "info"
-  );
+      if (exists) {
+        return current;
       }
+
+      const next = [
+        {
+          hash,
+          method,
+          jobId:
+            jobId !== undefined && jobId !== null
+              ? String(jobId)
+              : "",
+          address, // <-- tag with current wallet
+          timestamp: new Date().toISOString(),
+        },
+        ...current,
+      ];
+
+      try {
+        localStorage.setItem(
+          TX_STORAGE_KEY,
+          JSON.stringify(next)
+        );
+      } catch {
+        // Local storage failure should not break the app.
+      }
+
+      return next;
+    });
+  }
+
+  function clearTransactionHistory() {
+    if (!address) return;
+
+    setTransactions((current) => {
+      const next = current.filter(
+        (tx) => tx.address !== address
+      );
+
+      try {
+        localStorage.setItem(
+          TX_STORAGE_KEY,
+          JSON.stringify(next)
+        );
+      } catch {
+        // Ignore local storage errors.
+      }
+
+      return next;
+    });
+
+    showStatus(
+      "Transaction history cleared for this wallet.",
+      "info"
+    );
+  }
 
 
   /* --------------------------------------------------
@@ -2425,7 +2431,7 @@ return () => {
                   </div>
                 </div>
 
-                {transactions.length > 0 && (
+                {visibleTransactions.length > 0 && (
                   <button
                     className="action-button btn-secondary"
                     onClick={clearTransactionHistory}
@@ -2436,13 +2442,13 @@ return () => {
                 )}
               </div>
 
-              {transactions.length === 0 ? (
+              {visibleTransactions.length === 0 ? (
                 <div className="empty">
                   No transactions recorded yet.
                 </div>
               ) : (
                 <div className="tx-list">
-                  {transactions.map((transaction) => (
+                  {visibleTransactions.map((transaction) => (
                     <div
                       className="tx-item"
                       key={transaction.hash}
