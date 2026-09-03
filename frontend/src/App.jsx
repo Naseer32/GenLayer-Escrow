@@ -466,51 +466,62 @@ export default function App() {
   }, []);
 
     useEffect(() => {
-    if (!window.ethereum) return;
+if (!window.ethereum) return;
 
-    const handleAccountsChanged = async (accounts) => {
-      if (!accounts || accounts.length === 0) {
-        setAddress("");
-        showStatus(
-          "Wallet disconnected. Connect a wallet to continue.",
-          "info"
-        );
-        return;
-      }
+const handleAccountsChanged = async (accounts) => {
+  if (!accounts || accounts.length === 0) {
+    setAddress("");
+    showStatus(
+      "Wallet disconnected. Connect a wallet to continue.",
+      "info"
+    );
+    return;
+  }
 
-      try {
-        const rebuilt = await rebuildClient();
-
-        if (rebuilt) {
-          setAddress(rebuilt);
-
-          showStatus(
-            `Wallet changed to ${shortAddress(rebuilt)}.`,
-            "success"
-          );
-        }
-      } catch {
-        setAddress(accounts[0]);
-
-        showStatus(
-          `Wallet changed to ${shortAddress(accounts[0])}.`,
-          "success"
-        );
-      }
-    };
-
-    window.ethereum.on(
-      "accountsChanged",
-      handleAccountsChanged
+  try {
+    showStatus(
+      "Wallet changed. Rebuilding transaction client...",
+      "pending"
     );
 
-    return () => {
-      window.ethereum.removeListener(
-        "accountsChanged",
-        handleAccountsChanged
+    const rebuilt = await rebuildClient();
+
+    if (!rebuilt) {
+      throw new Error(
+        "Failed to rebuild the transaction client for the new wallet."
       );
-    };
-  }, []);
+    }
+
+    setAddress(rebuilt);
+
+    showStatus(
+      `Wallet changed to ${shortAddress(rebuilt)}. Transaction client updated.`,
+      "success"
+    );
+  } catch (error) {
+    setAddress("");
+
+    showStatus(
+      error?.message ||
+        "Wallet changed, but the transaction client could not be rebuilt.",
+      "error"
+    );
+  }
+};
+
+window.ethereum.on(
+  "accountsChanged",
+  handleAccountsChanged
+);
+
+return () => {
+  window.ethereum.removeListener(
+    "accountsChanged",
+    handleAccountsChanged
+  );
+};
+
+}, []);
 
   async function handleConnect() {
     if (busy) return;
