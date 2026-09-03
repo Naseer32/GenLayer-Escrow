@@ -465,10 +465,10 @@ export default function App() {
     };
   }, []);
 
-  useEffect(() => {
+    useEffect(() => {
     if (!window.ethereum) return;
 
-    const handleAccountsChanged = (accounts) => {
+    const handleAccountsChanged = async (accounts) => {
       if (!accounts || accounts.length === 0) {
         setAddress("");
         showStatus(
@@ -478,12 +478,25 @@ export default function App() {
         return;
       }
 
-      setAddress(accounts[0]);
+      try {
+        const rebuilt = await rebuildClient();
 
-      showStatus(
-        `Wallet changed to ${shortAddress(accounts[0])}.`,
-        "success"
-      );
+        if (rebuilt) {
+          setAddress(rebuilt);
+
+          showStatus(
+            `Wallet changed to ${shortAddress(rebuilt)}.`,
+            "success"
+          );
+        }
+      } catch {
+        setAddress(accounts[0]);
+
+        showStatus(
+          `Wallet changed to ${shortAddress(accounts[0])}.`,
+          "success"
+        );
+      }
     };
 
     window.ethereum.on(
