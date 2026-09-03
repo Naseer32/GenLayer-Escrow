@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 
 import {
   connectWallet,
@@ -555,57 +556,43 @@ return () => {
   -------------------------------------------------- */
 
   function saveTransaction({ hash, method, jobId }) {
-    if (!hash) return;
+  if (!hash || !address) return; // Don't save if no wallet is connected
 
-    setTransactions((current) => {
-      const exists = current.some(
-        (transaction) => transaction.hash === hash
-      );
+  setTransactions((current) => {
+    const exists = current.some(
+      (transaction) => transaction.hash === hash
+    );
 
-      if (exists) {
-        return current;
-      }
-
-      const next = [
-        {
-          hash,
-          method,
-          jobId:
-            jobId !== undefined && jobId !== null
-              ? String(jobId)
-              : "",
-          timestamp: new Date().toISOString(),
-        },
-        ...current,
-      ];
-
-      try {
-        localStorage.setItem(
-          TX_STORAGE_KEY,
-          JSON.stringify(next)
-        );
-      } catch {
-        // Local storage failure should not break the app.
-      }
-
-      return next;
-    });
-  }
-
-  function clearTransactionHistory() {
-    setTransactions([]);
-
-    try {
-      localStorage.removeItem(TX_STORAGE_KEY);
-    } catch {
-      // Ignore local storage errors.
+    if (exists) {
+      return current;
     }
 
-    showStatus(
-      "Transaction history cleared from this browser.",
-      "info"
-    );
-  }
+    const next = [
+      {
+        hash,
+        method,
+        jobId:
+          jobId !== undefined && jobId !== null
+            ? String(jobId)
+            : "",
+        address, // <-- tag with current wallet
+        timestamp: new Date().toISOString(),
+      },
+      ...current,
+    ];
+
+    try {
+      localStorage.setItem(
+        TX_STORAGE_KEY,
+        JSON.stringify(next)
+      );
+    } catch {
+      // Local storage failure should not break the app.
+    }
+
+    return next;
+  });
+        }
 
   /* --------------------------------------------------
      Create Job
