@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import {
   connectWallet,
   restoreWallet,
+  rebuildClient,
   getConnectedAddress,
   createJob,
   submitWork,
@@ -13,6 +14,7 @@ import {
   getJob,
   getJobCount,
 } from "./genlayer.js";
+
 
 const TX_STORAGE_KEY = "genlayer_escrow_transactions";
 
