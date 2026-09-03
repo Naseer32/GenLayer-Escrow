@@ -63,16 +63,21 @@ export async function restoreWallet() {
 
 export async function rebuildClient() {
   if (!window.ethereum) return null;
-    
-  const accounts = await window.ethereum.request({ method: "eth_accounts" });
+
+  const accounts = await window.ethereum.request({
+    method: "eth_accounts",
+  });
+
   if (!accounts || accounts.length === 0) return null;
-    
-  // Re-initialize provider, signer, and contract with the new account
-  provider = new ethers.providers.Web3Provider(window.ethereum);
-  signer = provider.getSigner();
-  contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
-    
-  return await signer.getAddress();
+
+  connectedAddress = accounts[0];
+
+  client = createClient({
+    chain: studionet,
+    account: connectedAddress,
+  });
+
+  return connectedAddress;
 }
 
 export function getClient() {
