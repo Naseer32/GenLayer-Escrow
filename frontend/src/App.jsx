@@ -593,6 +593,32 @@ return () => {
     return next;
   });
         }
+  function clearTransactionHistory() {
+  if (!address) return;
+
+  setTransactions((current) => {
+    const next = current.filter(
+      (tx) => tx.address !== address
+    );
+
+    try {
+      localStorage.setItem(
+        TX_STORAGE_KEY,
+        JSON.stringify(next)
+      );
+    } catch {
+      // Ignore local storage errors.
+    }
+
+    return next;
+  });
+
+  showStatus(
+    "Transaction history cleared for this wallet.",
+    "info"
+  );
+      }
+
 
   /* --------------------------------------------------
      Create Job
