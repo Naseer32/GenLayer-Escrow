@@ -61,6 +61,20 @@ export async function restoreWallet() {
   return connectedAddress;
 }
 
+export async function rebuildClient() {
+  if (!window.ethereum) return null;
+    
+  const accounts = await window.ethereum.request({ method: "eth_accounts" });
+  if (!accounts || accounts.length === 0) return null;
+    
+  // Re-initialize provider, signer, and contract with the new account
+  provider = new ethers.providers.Web3Provider(window.ethereum);
+  signer = provider.getSigner();
+  contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
+    
+  return await signer.getAddress();
+}
+
 export function getClient() {
   if (!client) {
     throw new Error(
@@ -243,6 +257,12 @@ export async function abandonJob(
 
   if (!reason || !reason.trim()) {
     throw new Error("Abandonment reason is required.");
+  }
+
+  if (reason.trim().length > 2000) {
+    throw new Error(
+      "Abandonment reason is required."
+    );
   }
 
   if (reason.trim().length > 2000) {
