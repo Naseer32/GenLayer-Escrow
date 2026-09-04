@@ -387,6 +387,8 @@ export default function App() {
   const [lookupJobId, setLookupJobId] = useState("");
   const [jobDetails, setJobDetails] = useState(null);
 
+  const [contractBalance, setContractBalance] = useState(null);
+
   const [transactions, setTransactions] = useState(() => {
     try {
       const stored = localStorage.getItem(TX_STORAGE_KEY);
@@ -1068,6 +1070,37 @@ return () => {
     }
   }
 
+  /* --------------------------------------------------
+   Contract Balance
+-------------------------------------------------- */
+
+async function handleCheckBalance() {
+  if (busy) return;
+
+  try {
+    startAction(
+      "balance",
+      "Checking contract balance..."
+    );
+
+    const bal = await getContractBalance();
+
+    setContractBalance(bal);
+
+    completeAction(
+      "balance",
+      "Contract balance retrieved successfully."
+    );
+  } catch (error) {
+    showStatus(
+      error?.message || "Failed to retrieve contract balance.",
+      "error"
+    );
+  } finally {
+    finishAction();
+  }
+}
+  
   /* --------------------------------------------------
      UI helpers
   -------------------------------------------------- */
