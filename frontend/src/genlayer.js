@@ -286,6 +286,15 @@ export async function abandonJob(
   });
 }
 
+export async function getContractBalance() {
+  const result = await client.readContract({
+    address: CONTRACT_ADDRESS,
+    functionName: "get_contract_balance",
+    args: [],
+  });
+  return result;
+}
+
 // --------------------------------------------------
 // Read-only calls
 // --------------------------------------------------
