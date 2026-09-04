@@ -2400,6 +2400,45 @@ async function handleCheckBalance() {
               )}
             </section>
 
+            {/* Contract Balance */}
+
+<section className="card">
+  <div className="card-head">
+    <div className="card-title-wrap">
+      <div className="icon-box icon-dark">
+        <Icon name="wallet" size={19} />
+      </div>
+
+      <div>
+        <h2>Contract Balance</h2>
+        <p className="card-description">
+          Verify the escrow contract's on-chain GEN balance.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <div className="action-row">
+    <button
+      className="action-button btn-balance"
+      onClick={handleCheckBalance}
+      disabled={busy || !address}
+    >
+      {buttonContent(
+        "balance",
+        "Check balance",
+        "wallet"
+      )}
+    </button>
+  </div>
+
+  {contractBalance !== null && (
+    <p className="card-description">
+      Balance: {(Number(contractBalance) / 1e18).toFixed(2)} GEN
+    </p>
+  )}
+</section>
+
             {/* Wallet */}
 
             <section className="card">
