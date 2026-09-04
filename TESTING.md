@@ -73,3 +73,19 @@ reached `FINALIZED` status with 5-validator consensus.
 `create_job` returned job ID `7` directly (not `6`), confirming
 job IDs are now 1-based as returned to callers, addressing the
 previously reported zero-based job ID display bug.
+
+## Test: Job 8 — Second Approve Payout (Bonus Confirmation)
+
+**Escrow amount:** 5 GEN
+
+- `create_job` tx: `0x08072bec6eaffea3da217e0d2da95d1dc35d5f2f77c81e4ca9d5a69cd60569a6` — FINALIZED, job ID `8` returned, contract balance 10→15 GEN
+- `submit_work` tx: `0xd4f5b5dacca5ac1099b84f82cf171b5d6af9524e64e69ae3edae6b5a9278b475` — FINALIZED, URL deliverable submitted (unreachable `.invalid` domain), Equivalence Principle output `{"available":false,"digest":""}`, confirming validators independently agreed the URL was unfetchable and correctly left `deliverable_digest` empty
+- `approve` tx: `0x77bb225a7b8e94158d4dbddfc1ec94145bfb83709982ffc13411c4f49e7164af` — FINALIZED
+
+**Result:**
+| Account | Before | After | Delta |
+|---|---|---|---|
+| Contract balance | 15 GEN | 10 GEN | −5 GEN |
+| Freelancer wallet | 45 GEN | 50 GEN | +5 GEN |
+
+This is a second independent confirmation of the native-transfer payout path, and additionally demonstrates that an unfetchable URL correctly pins an empty digest via multi-validator consensus rather than crashing or defaulting to unsafe behavior.
