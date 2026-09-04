@@ -89,3 +89,21 @@ previously reported zero-based job ID display bug.
 | Freelancer wallet | 45 GEN | 50 GEN | +5 GEN |
 
 This is a second independent confirmation of the native-transfer payout path, and additionally demonstrates that an unfetchable URL correctly pins an empty digest via multi-validator consensus rather than crashing or defaulting to unsafe behavior.
+
+## Test: Job 9 — Evidence Unavailable Recovery (Deterministic 50/50 Split)
+
+**Escrow amount:** 8 GEN
+
+- `create_job` tx: `0x7399341ce1e4557003f2e485151de2b272d9504d66bac7d4fe983bf45ee828e2` — FINALIZED, job ID `9` returned, contract balance 10→18 GEN
+- `submit_work` tx: `0xc7c7c393f60da76bad3e6aed701992820e15282b6e41af35f05dd64aea0718ad` — FINALIZED, unreachable URL submitted (`https://this-definitely-does-not-exist-99999.xyz/page.html`), Equivalence Principle output `{"available":false,"digest":""}` — no snapshot pinned at submission
+- `dispute` tx: `0x1d21bab7cf732a5c8ba18d38bf203497d34d6eb1d8ca96a88712ee9e4db2710c` — FINALIZED, resolved to `status: "evidence_unavailable"` without adjudication, since no digest was ever pinned. Equivalence Principle output at dispute time again confirms `{"available":false,"content":"","digest":""}`
+- `recover_unavailable_job` tx: `0x266388c0b9e1b3fec15e46e53e53d4d6678525d51c33528d514dc668440a3fd2` — FINALIZED, triggered the deterministic neutral 50/50 split
+
+**Result:**
+| Account | Before | After | Delta |
+|---|---|---|---|
+| Contract balance | 18 GEN | 10 GEN | −8 GEN |
+| Client wallet | 50 GEN | 54 GEN | +4 GEN |
+| Freelancer wallet | 50 GEN | 54 GEN | +4 GEN |
+
+This confirms `recover_unavailable_job()` applies a genuinely deterministic neutral rule (no LLM adjudication) and correctly splits the escrow 50/50 via `emit_transfer()` to both parties when evidence cannot be verified.
