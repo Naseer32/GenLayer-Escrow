@@ -12,6 +12,7 @@ import {
   recoverUnavailableJob,
   abandonJob,
   getJob,
+  getContractBalance,
   getJobCount,
 } from "./genlayer.js";
 
