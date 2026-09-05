@@ -170,3 +170,48 @@ recipient wallet side, demonstrating that `_pay()` → `emit_transfer()`
 performs genuine native GEN transfers rather than internal
 accounting updates alone.
 
+---
+
+## Automated Test Suite
+
+In addition to the manual on-chain evidence above, this repository
+includes an automated pytest suite (`tests/test_escrow_payout.py`)
+built with `gltest` (GenLayer Testing Suite, Studio Mode). These
+tests run against live GenLayer Studio with real multi-validator
+consensus — not mocks — and verify actual state transitions and
+balance changes for every payout path.
+
+### Running the tests
+
+    pip install -r requirements.txt
+    gltest tests/test_escrow_payout.py --network studionet -v
+
+Each test deploys a fresh contract instance, so tests are
+independent and can be run individually:
+
+    gltest tests/test_escrow_payout.py::test_approve_payout_transfers_to_freelancer --network studionet -v
+
+### Test Results (September 5, 2026)
+
+| Test | Payout path verified | Result |
+|---|---|---|
+| `test_approve_payout_transfers_to_freelancer` | `approve()` → freelancer paid | PASSED |
+| `test_dispute_payout_to_client_on_rejection` | `dispute()` → LLM adjudication → client refund | PASSED |
+| `test_approve_before_submission_fails` | Payout not triggered prematurely (no submission) | PASSED |
+| `test_abandon_before_period_elapsed_fails` | Payout not triggered prematurely (before `ABANDONMENT_PERIOD`) | PASSED |
+| `test_payout_amount_matches_escrow_exactly` | Exact amount transferred, no fee deduction | PASSED |
+| `test_recovery_unavailable_50_50_split` | Multi-party payout — 50/50 split via `recover_unavailable_job()` | PASSED |
+| `test_cannot_double_pay` | Idempotency — second `approve()` call rejected | PASSED |
+
+**All 7 tests passed.** Each test that exercises `_pay()` asserts
+the contract balance actually decreased by the escrow amount
+(`get_contract_balance()`), and the successful-payout tests use
+`wait_transaction_status=TransactionStatus.FINALIZED` to confirm
+the transaction fully settled on-chain before checking balances —
+not just that it was accepted into the mempool.
+
+This closes the previously reported gap: the repository now
+contains real, runnable, code-based tests that independently prove
+every payout path (`approve`, `dispute`, `recover_unavailable_job`,
+and the premature-trigger guards) — not only the manual Studio
+transaction log above.
