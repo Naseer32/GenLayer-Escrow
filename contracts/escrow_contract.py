@@ -831,7 +831,7 @@ Respond with ONLY a JSON object:
             milestones.append(
                 Milestone(
                     description=desc,
-                    amount=amt,
+                    amount=u256(int(amt)),
                     deliverable="",
                     status="pending",
                     resolution="",
