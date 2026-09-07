@@ -1,4 +1,4 @@
-# v0.5.0
+# v0.6.0
 # { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }
 
 """
@@ -15,6 +15,14 @@ Flow:
   6. Recovery uses independent GenLayer consensus to determine payout
   7. If a job sits unactioned past ABANDONMENT_PERIOD, either party
      can request abandonment recovery and consensus determines payout
+
+Changes from v0.5.0:
+  - Added milestone-based jobs: create_milestone_job(),
+    submit_milestone(), approve_milestone(). A job can be split
+    into named milestones, each with its own amount, submitted
+    and approved independently, releasing only that milestone's
+    portion of the escrow via the existing _pay() -> emit_transfer()
+    path. Disputes and recovery remain job-level only for now.
 
 Changes from v0.4.1 (steward-requested fixes):
   - _pay() uses emit_transfer(), the documented GenLayer native
@@ -52,6 +60,16 @@ def _digest(content: str) -> str:
 
 @allow_storage
 @dataclass
+class Milestone:
+    description: str
+    amount: u256
+    deliverable: str
+    status: str          # "pending" | "submitted" | "resolved"
+    resolution: str       # "" | "freelancer" | "client"
+
+
+@allow_storage
+@dataclass
 class Job:
     client: Address
     freelancer: Address
@@ -66,6 +84,7 @@ class Job:
     recovery_used: bool
     created_at: datetime.datetime
     submitted_at: datetime.datetime
+    milestones: DynArray[Milestone]
 
 
 class FreelanceEscrow(gl.Contract):
@@ -240,6 +259,7 @@ class FreelanceEscrow(gl.Contract):
             recovery_used=False,
             created_at=now,
             submitted_at=now,  # placeholder until submit_work
+            milestones=DynArray[Milestone](),
         )
 
         self.jobs.append(job)
@@ -764,6 +784,153 @@ Respond with ONLY a JSON object:
             job.resolution = "freelancer"
             self._pay(job.freelancer, job.amount)
 
+    # ---------- Milestone-based jobs ----------
+
+    @gl.public.write.payable
+    def create_milestone_job(
+        self,
+        freelancer: str,
+        milestone_descriptions: list[str],
+        milestone_amounts: list[u256],
+    ) -> u256:
+        """
+        Same as create_job, but splits escrow into named
+        milestones. Each milestone is submitted and approved
+        independently, releasing only that milestone's amount.
+        """
+
+        if len(milestone_descriptions) != len(milestone_amounts):
+            raise gl.vm.UserError(
+                "descriptions and amounts must match in length"
+            )
+
+        if len(milestone_descriptions) == 0:
+            raise gl.vm.UserError(
+                "at least one milestone is required"
+            )
+
+        total = u256(0)
+        for amt in milestone_amounts:
+            total = u256(int(total) + int(amt))
+
+        if total != gl.message.value:
+            raise gl.vm.UserError(
+                "milestone amounts must sum to the escrow value sent"
+            )
+
+        milestones = DynArray[Milestone]()
+        for desc, amt in zip(milestone_descriptions, milestone_amounts):
+            if not desc.strip():
+                raise gl.vm.UserError(
+                    "milestone description cannot be empty"
+                )
+            if amt == u256(0):
+                raise gl.vm.UserError(
+                    "milestone amount must be > 0"
+                )
+            milestones.append(
+                Milestone(
+                    description=desc,
+                    amount=amt,
+                    deliverable="",
+                    status="pending",
+                    resolution="",
+                )
+            )
+
+        now = datetime.datetime.now()
+
+        job = Job(
+            client=gl.message.sender_address,
+            freelancer=Address(freelancer),
+            requirements="; ".join(milestone_descriptions),
+            amount=gl.message.value,
+            deliverable="",
+            deliverable_is_url=False,
+            deliverable_digest="",
+            dispute_reason="",
+            status="open",
+            resolution="",
+            recovery_used=False,
+            created_at=now,
+            submitted_at=now,
+            milestones=milestones,
+        )
+
+        self.jobs.append(job)
+
+        return u256(len(self.jobs))
+
+    @gl.public.write
+    def submit_milestone(
+        self,
+        job_id: u256,
+        milestone_index: u256,
+        deliverable: str,
+    ) -> None:
+
+        job = self._get_job(job_id)
+
+        if gl.message.sender_address != job.freelancer:
+            raise gl.vm.UserError(
+                "only the assigned freelancer can submit"
+            )
+
+        idx = int(milestone_index)
+
+        if idx < 0 or idx >= len(job.milestones):
+            raise gl.vm.UserError(
+                f"milestone does not exist (index: {idx})"
+            )
+
+        milestone = job.milestones[idx]
+
+        if milestone.status != "pending":
+            raise gl.vm.UserError(
+                f"milestone is not pending (status: {milestone.status})"
+            )
+
+        if not deliverable.strip():
+            raise gl.vm.UserError(
+                "deliverable cannot be empty"
+            )
+
+        milestone.deliverable = deliverable
+        milestone.status = "submitted"
+
+    @gl.public.write
+    def approve_milestone(
+        self,
+        job_id: u256,
+        milestone_index: u256,
+    ) -> None:
+
+        job = self._get_job(job_id)
+
+        if gl.message.sender_address != job.client:
+            raise gl.vm.UserError(
+                "only the client can approve"
+            )
+
+        idx = int(milestone_index)
+
+        if idx < 0 or idx >= len(job.milestones):
+            raise gl.vm.UserError(
+                f"milestone does not exist (index: {idx})"
+            )
+
+        milestone = job.milestones[idx]
+
+        if milestone.status != "submitted":
+            raise gl.vm.UserError(
+                f"nothing to approve (status: {milestone.status})"
+            )
+
+        milestone.status = "resolved"
+        milestone.resolution = "freelancer"
+
+        self._pay(job.freelancer, milestone.amount)
+
     # ---------- Internal payment ----------
 
     def _pay(
@@ -819,6 +986,16 @@ Respond with ONLY a JSON object:
                 job.created_at.isoformat(),
             "submitted_at":
                 job.submitted_at.isoformat(),
+            "milestones": [
+                {
+                    "description": m.description,
+                    "amount": str(m.amount),
+                    "deliverable": m.deliverable,
+                    "status": m.status,
+                    "resolution": m.resolution,
+                }
+                for m in job.milestones
+            ],
         }
 
     @gl.public.view
