@@ -215,3 +215,93 @@ contains real, runnable, code-based tests that independently prove
 every payout path (`approve`, `dispute`, `recover_unavailable_job`,
 and the premature-trigger guards) — not only the manual Studio
 transaction log above.
+
+---
+
+## Milestone Feature: Partial Payouts (v0.6.0)
+
+New in this version: jobs can optionally be split into named
+milestones, each with its own escrow amount, submitted and
+approved independently. Each approval releases only that
+milestone's portion via the existing `_pay()` -> `emit_transfer()`
+path — the job-level payout mechanism is reused, not duplicated.
+
+New contract functions: `create_milestone_job()`,
+`submit_milestone()`, `approve_milestone()`.
+
+### Test: Job 1 — Two-Milestone Job, Sequential Partial Payouts
+
+**Participants**
+- Client: `0xBD6D84fC12AE3b9b3110FCc9efF91DDf5d59Aa01`
+- Freelancer: `0x58e9e85f73840b07e2d8f67c65ac62620F18bf82`
+- Total escrow: 5 GEN, split into two milestones:
+  - Milestone 0 — "Design mockup" — 2 GEN
+  - Milestone 1 — "Build the page" — 3 GEN
+
+**Step 1 — `create_milestone_job`**
+- Tx hash: `0xbe9f5e5ffc673bf2ffc25e746c18aba3d8377b168dee193dfab33d701af3d51b`
+- Status: **SUCCESS**, 5 validators, all Agree
+- Return value: `1` (job ID)
+- `get_job(1)` confirmed both milestones stored correctly, both `status: "pending"`
+
+**Step 2 — `submit_milestone(1, 0, ...)`** (Design mockup)
+- Tx hash: `0xa8685146c1931821c06f701a4223a0a834c8dc237e8b771f31fc10cb406759f1`
+- Status: **FINALIZED**, all 5 validators Agree
+
+**Step 3 — `approve_milestone(1, 0)`**
+- Tx hash: `0x1a769acf20da07f1996892afecedfe0e4bf04cc809a2368be2c8871c92f98f04`
+- Status: **SUCCESS**, 5 validators Agree
+
+**Result after milestone 0 approval:**
+| Account | Before | After | Delta |
+|---|---|---|---|
+| Contract balance | 5 GEN | 3 GEN | −2 GEN |
+| Freelancer wallet | 42 GEN | 44 GEN | +2 GEN |
+
+Milestone 1 ("Build the page", 3 GEN) remained `status: "pending"`
+and untouched — only milestone 0's amount was released, confirming
+partial payout isolation.
+
+**Step 4 — `submit_milestone(1, 1, ...)`** (Build the page)
+- Tx hash: `0xd203553b40808bb7d71c3e3d2ae5f72a7e93f89620a10829eeebf9b9f663dde8`
+- Status: **SUCCESS**, 4 of 5 validators Agree (1 idle after quorum reached — normal)
+
+**Step 5 — `approve_milestone(1, 1)`**
+- Tx hash: `0x6ccf588e77ffaa16c2fcfa964ba0013afaadd450b03015ffa34cd228b9cde8ad`
+- Status: **SUCCESS**, 5 validators Agree
+
+**Result after milestone 1 approval:**
+| Account | Before | After | Delta |
+|---|---|---|---|
+| Contract balance | 3 GEN | 0 GEN | −3 GEN |
+
+**Final state (`get_job(1)`):**
+Both milestones show `status: "resolved"`, `resolution: "freelancer"`,
+with their individual deliverables recorded. Contract balance
+reached exactly 0 GEN after both milestones were paid — the two
+partial payouts (2 GEN + 3 GEN) summed to the full 5 GEN escrow
+with no discrepancy.
+
+### Conclusion
+
+Milestone-based jobs correctly release funds incrementally: each
+`approve_milestone()` call pays out only that milestone's exact
+amount via `emit_transfer()`, leaving other milestones' funds
+locked until independently approved. This was verified with two
+sequential real payouts on Studionet, each confirmed against both
+the contract's balance and the freelancer's wallet balance.
+
+### Known issues fixed during implementation
+
+Two runtime errors were hit and fixed while building this feature,
+both around constructing a `DynArray`/typed value outside of
+storage context:
+- `DynArray[Milestone]()` cannot be instantiated directly by user
+  code — fixed by building milestones as a plain Python `list` and
+  letting the `Job`/`Milestone` dataclasses' storage wrapper handle
+  the conversion.
+- Milestone `amount` values arrived as `str` from calldata and were
+  stored directly without conversion, causing an `AttributeError`
+  in the storage layer (`'str' object has no attribute 'to_bytes'`)
+  — fixed by explicitly converting with `u256(int(amt))` before
+  constructing each `Milestone`.
