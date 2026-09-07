@@ -323,3 +323,78 @@ export async function getJobCount() {
     args: [],
   });
 }
+
+export async function createMilestoneJob(
+  freelancerAddress,
+  milestoneDescriptions,
+  milestoneAmountsInGen
+) {
+  const c = getClient();
+
+  if (!freelancerAddress || !freelancerAddress.trim()) {
+    throw new Error("Freelancer address is required.");
+  }
+
+  if (!Array.isArray(milestoneDescriptions) || milestoneDescriptions.length === 0) {
+    throw new Error("At least one milestone description is required.");
+  }
+
+  if (milestoneDescriptions.length !== milestoneAmountsInGen.length) {
+    throw new Error("Descriptions and amounts must match in count.");
+  }
+
+  const amountsInWei = milestoneAmountsInGen.map((amt) => {
+    const n = Number(amt);
+    if (!Number.isFinite(n) || n <= 0) {
+      throw new Error("Each milestone amount must be greater than 0 GEN.");
+    }
+    return BigInt(Math.floor(n * 1e18)).toString();
+  });
+
+  const totalValue = amountsInWei.reduce(
+    (sum, w) => sum + BigInt(w),
+    BigInt(0)
+  );
+
+  const previousCount = Number(await getJobCount());
+
+  const txHash = await c.writeContract({
+    address: CONTRACT_ADDRESS,
+    functionName: "create_milestone_job",
+    args: [
+      freelancerAddress.trim(),
+      milestoneDescriptions,
+      amountsInWei,
+    ],
+    value: totalValue,
+  });
+
+  return { hash: txHash, previousCount };
+}
+
+export async function submitMilestone(jobId, milestoneIndex, deliverable) {
+  if (!String(jobId).trim()) {
+    throw new Error("Job ID is required.");
+  }
+  if (!deliverable || !deliverable.trim()) {
+    throw new Error("Deliverable is required.");
+  }
+
+  return sendTransaction({
+    address: CONTRACT_ADDRESS,
+    functionName: "submit_milestone",
+    args: [jobId, milestoneIndex, deliverable.trim()],
+  });
+}
+
+export async function approveMilestone(jobId, milestoneIndex) {
+  if (!String(jobId).trim()) {
+    throw new Error("Job ID is required.");
+  }
+
+  return sendTransaction({
+    address: CONTRACT_ADDRESS,
+    functionName: "approve_milestone",
+    args: [jobId, milestoneIndex],
+  });
+}
