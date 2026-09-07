@@ -259,7 +259,7 @@ class FreelanceEscrow(gl.Contract):
             recovery_used=False,
             created_at=now,
             submitted_at=now,  # placeholder until submit_work
-            milestones=DynArray[Milestone](),
+            milestones=[],
         )
 
         self.jobs.append(job)
@@ -818,7 +818,7 @@ Respond with ONLY a JSON object:
                 "milestone amounts must sum to the escrow value sent"
             )
 
-        milestones = DynArray[Milestone]()
+        milestones = []
         for desc, amt in zip(milestone_descriptions, milestone_amounts):
             if not desc.strip():
                 raise gl.vm.UserError(
