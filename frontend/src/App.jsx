@@ -346,7 +346,7 @@ function JobResult({ jobId, details }) {
 
       {Array.isArray(details?.milestones) && details.milestones.length > 0 && (
         <div className="milestones-box">
-          <div className="result-kicker">MILESTONES</div>
+          <div className="result-kicker">MILESTONES DEBUG TEST 123</div>
           {details.milestones.map((m, idx) => (
             <div key={idx} className="result-item milestone-item">
               <span>
