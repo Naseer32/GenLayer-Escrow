@@ -344,6 +344,23 @@ function JobResult({ jobId, details }) {
         </div>
       )}
 
+      {Array.isArray(details?.milestones) && details.milestones.length > 0 && (
+        <div className="milestones-box">
+          <div className="result-kicker">MILESTONES</div>
+          {details.milestones.map((m, idx) => (
+            <div key={idx} className="result-item milestone-item">
+              <span>
+                #{idx} — {m.description} (
+                {(Number(m.amount) / 1e18).toFixed(2)} GEN)
+              </span>
+              <strong className={`badge ${statusClass(m.status)}`}>
+                {statusLabel(m.status)}
+              </strong>
+            </div>
+          ))}
+        </div>
+      )}
+
       <details className="raw-result">
         <summary>View contract response</summary>
         <pre>{resultToText(details)}</pre>
