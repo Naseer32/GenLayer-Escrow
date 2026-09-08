@@ -2324,6 +2324,286 @@ async function handleCheckBalance() {
               )}
             </section>
 
+            {/* Create Milestone Job */}
+
+            <section className="card">
+              <div className="card-head">
+                <div className="card-title-wrap">
+                  <div className="icon-box icon-blue">
+                    <Icon name="lock" size={19} />
+                  </div>
+
+                  <div>
+                    <h2>Create Milestone Job</h2>
+                    <p className="card-description">
+                      Split escrow into milestones paid out independently.
+                    </p>
+                  </div>
+                </div>
+
+                <span className="badge badge-info">
+                  OPTIONAL
+                </span>
+              </div>
+
+              <div className="field">
+                <label className="section-label">
+                  Freelancer wallet
+                </label>
+
+                <input
+                  className="input"
+                  value={milestoneFreelancer}
+                  onChange={(event) =>
+                    setMilestoneFreelancer(event.target.value)
+                  }
+                  placeholder="0x..."
+                  disabled={busy}
+                />
+              </div>
+
+              {milestoneDescriptions.map((desc, idx) => (
+                <div className="two-fields" key={idx}>
+                  <div className="field">
+                    <label className="section-label">
+                      Milestone #{idx} description
+                    </label>
+
+                    <input
+                      className="input"
+                      value={desc}
+                      onChange={(event) =>
+                        updateMilestoneDescription(
+                          idx,
+                          event.target.value
+                        )
+                      }
+                      placeholder="e.g. Design mockup"
+                      disabled={busy}
+                    />
+                  </div>
+
+                  <div className="field">
+                    <label className="section-label">
+                      Amount (GEN)
+                    </label>
+
+                    <input
+                      className="input"
+                      type="number"
+                      min="0"
+                      step="any"
+                      value={milestoneAmounts[idx]}
+                      onChange={(event) =>
+                        updateMilestoneAmount(
+                          idx,
+                          event.target.value
+                        )
+                      }
+                      placeholder="2"
+                      disabled={busy}
+                    />
+                  </div>
+
+                  {milestoneDescriptions.length > 1 && (
+                    <button
+                      type="button"
+                      className="action-button"
+                      onClick={() => removeMilestoneField(idx)}
+                      disabled={busy}
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+              ))}
+
+              <div className="action-row">
+                <button
+                  type="button"
+                  className="action-button"
+                  onClick={addMilestoneField}
+                  disabled={busy}
+                >
+                  + Add milestone
+                </button>
+
+                <button
+                  className="action-button btn-create"
+                  onClick={handleCreateMilestoneJob}
+                  disabled={busy || !address}
+                >
+                  {buttonContent(
+                    "createMilestone",
+                    "Create milestone job",
+                    "zap"
+                  )}
+                </button>
+              </div>
+            </section>
+
+            {/* Submit Milestone */}
+
+            <section className="card">
+              <div className="card-head">
+                <div className="card-title-wrap">
+                  <div className="icon-box icon-blue">
+                    <Icon name="lock" size={19} />
+                  </div>
+
+                  <div>
+                    <h2>Submit Milestone</h2>
+                    <p className="card-description">
+                      Freelancer submits one milestone's deliverable.
+                    </p>
+                  </div>
+                </div>
+
+                <span className="badge badge-info">
+                  OPTIONAL
+                </span>
+              </div>
+
+              <div className="two-fields">
+                <div className="field">
+                  <label className="section-label">
+                    Job ID
+                  </label>
+
+                  <input
+                    className="input"
+                    value={milestoneSubmitJobId}
+                    onChange={(event) =>
+                      setMilestoneSubmitJobId(event.target.value)
+                    }
+                    placeholder="1"
+                    disabled={busy}
+                  />
+                </div>
+
+                <div className="field">
+                  <label className="section-label">
+                    Milestone index
+                  </label>
+
+                  <input
+                    className="input"
+                    type="number"
+                    min="0"
+                    value={milestoneSubmitIndex}
+                    onChange={(event) =>
+                      setMilestoneSubmitIndex(event.target.value)
+                    }
+                    placeholder="0"
+                    disabled={busy}
+                  />
+                </div>
+              </div>
+
+              <div className="field">
+                <label className="section-label">
+                  Deliverable
+                </label>
+
+                <textarea
+                  className="textarea"
+                  value={milestoneDeliverable}
+                  onChange={(event) =>
+                    setMilestoneDeliverable(event.target.value)
+                  }
+                  placeholder="Paste the completed work for this milestone..."
+                  disabled={busy}
+                />
+              </div>
+
+              <div className="action-row">
+                <button
+                  className="action-button btn-create"
+                  onClick={handleSubmitMilestone}
+                  disabled={busy || !address}
+                >
+                  {buttonContent(
+                    "submitMilestone",
+                    "Submit milestone",
+                    "zap"
+                  )}
+                </button>
+              </div>
+            </section>
+
+            {/* Approve Milestone */}
+
+            <section className="card">
+              <div className="card-head">
+                <div className="card-title-wrap">
+                  <div className="icon-box icon-blue">
+                    <Icon name="lock" size={19} />
+                  </div>
+
+                  <div>
+                    <h2>Approve Milestone</h2>
+                    <p className="card-description">
+                      Client approves one milestone, releasing only its amount.
+                    </p>
+                  </div>
+                </div>
+
+                <span className="badge badge-info">
+                  OPTIONAL
+                </span>
+              </div>
+
+              <div className="two-fields">
+                <div className="field">
+                  <label className="section-label">
+                    Job ID
+                  </label>
+
+                  <input
+                    className="input"
+                    value={milestoneApproveJobId}
+                    onChange={(event) =>
+                      setMilestoneApproveJobId(event.target.value)
+                    }
+                    placeholder="1"
+                    disabled={busy}
+                  />
+                </div>
+
+                <div className="field">
+                  <label className="section-label">
+                    Milestone index
+                  </label>
+
+                  <input
+                    className="input"
+                    type="number"
+                    min="0"
+                    value={milestoneApproveIndex}
+                    onChange={(event) =>
+                      setMilestoneApproveIndex(event.target.value)
+                    }
+                    placeholder="0"
+                    disabled={busy}
+                  />
+                </div>
+              </div>
+
+              <div className="action-row">
+                <button
+                  className="action-button btn-create"
+                  onClick={handleApproveMilestone}
+                  disabled={busy || !address}
+                >
+                  {buttonContent(
+                    "approveMilestone",
+                    "Approve milestone",
+                    "zap"
+                  )}
+                </button>
+              </div>
+            </section>
+
             {/* Submit Work */}
 
             <section className="card">
