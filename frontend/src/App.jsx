@@ -19,6 +19,7 @@ import {
   approveMilestone,
   getConnectedChainId,
   EXPECTED_CHAIN_ID,
+  disconnectWallet,
 } from "./genlayer.js";
 
 
@@ -639,6 +640,16 @@ return () => {
     } finally {
       finishAction();
     }
+  }
+
+  function handleDisconnect() {
+    disconnectWallet();
+    setAddress("");
+    setChainId(null);
+    showStatus(
+      "Wallet disconnected. Connect a wallet to continue.",
+      "info"
+    );
   }
 
   /* --------------------------------------------------
@@ -2333,6 +2344,17 @@ async function handleCheckBalance() {
                       Studionet (61999) in your wallet
                     </div>
                   )}
+
+                  <div className="action-row" style={{ marginTop: "12px" }}>
+                    <button
+                      type="button"
+                      className="action-button"
+                      onClick={handleDisconnect}
+                      disabled={busy}
+                    >
+                      Disconnect
+                    </button>
+                  </div>
                 </>
               ) : (
                 <div className="empty">

@@ -28,6 +28,16 @@ export function getConnectedAddress() {
   return connectedAddress;
 }
 
+export function disconnectWallet() {
+  connectedAddress = null;
+  client = null;
+}
+
+export function disconnectWallet() {
+  connectedAddress = null;
+  client = null;
+}
+
 // Connect wallet
 export async function connectWallet() {
   if (!window.ethereum) {
