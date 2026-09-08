@@ -560,6 +560,20 @@ return () => {
 
 }, []);
 
+  async function refreshJobIfLookedUp(jobId) {
+    if (!jobId) return;
+    if (String(lookupJobId).trim() !== String(jobId).trim()) return;
+
+    try {
+      const details = await getJob(jobId);
+      setJobDetails(details);
+    } catch {
+      // Ignore refresh errors silently; the user can still
+      // manually check status if this fails.
+    }
+  }
+
+
   async function handleConnect() {
     if (busy) return;
 
@@ -942,6 +956,8 @@ return () => {
         `Milestone #${milestoneSubmitIndex} submitted successfully.`
       );
 
+      await refreshJobIfLookedUp(milestoneSubmitJobId);
+
       setMilestoneDeliverable("");
     } catch (error) {
       showStatus(
@@ -994,6 +1010,8 @@ return () => {
         "approveMilestone",
         `Milestone #${milestoneApproveIndex} approved and paid out.`
       );
+
+      await refreshJobIfLookedUp(milestoneApproveJobId);
     } catch (error) {
       showStatus(
         error?.message || "Failed to approve the milestone.",
