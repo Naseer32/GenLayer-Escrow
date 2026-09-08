@@ -33,11 +33,6 @@ export function disconnectWallet() {
   client = null;
 }
 
-export function disconnectWallet() {
-  connectedAddress = null;
-  client = null;
-}
-
 // Connect wallet
 export async function connectWallet() {
   if (!window.ethereum) {
