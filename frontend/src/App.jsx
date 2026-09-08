@@ -489,6 +489,11 @@ export default function App() {
         if (mounted && restored) {
           setAddress(restored);
 
+          const currentChainId = await getConnectedChainId();
+          if (mounted) {
+            setChainId(currentChainId);
+          }
+
           showStatus(
             "Wallet restored. You can continue using the escrow.",
             "success"
@@ -550,15 +555,36 @@ const handleAccountsChanged = async (accounts) => {
   }
 };
 
+const handleChainChanged = async () => {
+  const currentChainId = await getConnectedChainId();
+  setChainId(currentChainId);
+
+  if (currentChainId !== EXPECTED_CHAIN_ID) {
+    showStatus(
+      "Wallet switched to a different network. Switch back to Studionet to continue.",
+      "error"
+    );
+  }
+};
+
 window.ethereum.on(
   "accountsChanged",
   handleAccountsChanged
+);
+
+window.ethereum.on(
+  "chainChanged",
+  handleChainChanged
 );
 
 return () => {
   window.ethereum.removeListener(
     "accountsChanged",
     handleAccountsChanged
+  );
+  window.ethereum.removeListener(
+    "chainChanged",
+    handleChainChanged
   );
 };
 
