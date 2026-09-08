@@ -2274,6 +2274,73 @@ async function handleCheckBalance() {
 
         <div className="layout">
           <div className="stack">
+
+            {/* Wallet */}
+
+            <section className="card">
+              <div className="card-head">
+                <div className="card-title-wrap">
+                  <div className="icon-box icon-blue">
+                    <Icon name="wallet" size={19} />
+                  </div>
+
+                  <div>
+                    <h2>Wallet</h2>
+                    <p className="card-description">
+                      Current wallet used for contract actions.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {address ? (
+                <>
+                  <div className="section-label">
+                    Connected address
+                  </div>
+
+                  <div
+                    className="input"
+                    title={address}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      fontWeight: 700,
+                    }}
+                  >
+                    {shortAddress(address)}
+                  </div>
+
+                  <div className="wallet-note">
+                    {address}
+                  </div>
+
+                  <div className="section-label" style={{ marginTop: "12px" }}>
+                    Network
+                  </div>
+
+                  {chainId === EXPECTED_CHAIN_ID ? (
+                    <div className="badge badge-success">
+                      Connected to Studionet
+                    </div>
+                  ) : chainId === null ? (
+                    <div className="badge badge-info">
+                      Network unknown
+                    </div>
+                  ) : (
+                    <div className="badge badge-error">
+                      Wrong network (chain ID {chainId}) — switch to
+                      Studionet (61999) in your wallet
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="empty">
+                  No wallet connected.
+                </div>
+              )}
+            </section>
+
             {/* Create Job */}
 
             <section className="card">
@@ -3053,71 +3120,7 @@ async function handleCheckBalance() {
   )}
 </section>
 
-            {/* Wallet */}
-
-            <section className="card">
-              <div className="card-head">
-                <div className="card-title-wrap">
-                  <div className="icon-box icon-blue">
-                    <Icon name="wallet" size={19} />
-                  </div>
-
-                  <div>
-                    <h2>Wallet</h2>
-                    <p className="card-description">
-                      Current wallet used for contract actions.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {address ? (
-                <>
-                  <div className="section-label">
-                    Connected address
-                  </div>
-
-                  <div
-                    className="input"
-                    title={address}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      fontWeight: 700,
-                    }}
-                  >
-                    {shortAddress(address)}
-                  </div>
-
-                  <div className="wallet-note">
-                    {address}
-                  </div>
-
-                  <div className="section-label" style={{ marginTop: "12px" }}>
-                    Network
-                  </div>
-
-                  {chainId === EXPECTED_CHAIN_ID ? (
-                    <div className="badge badge-success">
-                      Connected to Studionet
-                    </div>
-                  ) : chainId === null ? (
-                    <div className="badge badge-info">
-                      Network unknown
-                    </div>
-                  ) : (
-                    <div className="badge badge-error">
-                      Wrong network (chain ID {chainId}) — switch to
-                      Studionet (61999) in your wallet
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div className="empty">
-                  No wallet connected.
-                </div>
-              )}
-            </section>
+            
 
             {/* Transactions */}
 
