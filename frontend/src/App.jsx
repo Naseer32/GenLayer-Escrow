@@ -288,7 +288,9 @@ function statusClass(value) {
    Job result
 -------------------------------------------------- */
 
-function JobResult({ jobId, details }) {
+function JobResult({ jobId, details, onRecover, busy }) {
+  const [recoveryReason, setRecoveryReason] = useState("");
+
   const status = findField(details, [
     "status",
     "state",
@@ -315,6 +317,51 @@ function JobResult({ jobId, details }) {
 
   return (
     <div className="result-box">
+      {status === "evidence_unavailable" && (
+        <div
+          style={{
+            background: "#fff4e5",
+            border: "1px solid #f5c26b",
+            borderRadius: "10px",
+            padding: "14px",
+            marginBottom: "14px",
+          }}
+        >
+          <strong style={{ display: "block", marginBottom: "6px" }}>
+            Recovery needed
+          </strong>
+          <p style={{ fontSize: "13px", margin: "0 0 10px 0" }}>
+            The submitted evidence for this job could not be
+            verified. Either party can request recovery, which
+            splits the escrow 50/50.
+          </p>
+
+          <textarea
+            className="textarea"
+            value={recoveryReason}
+            onChange={(event) =>
+              setRecoveryReason(event.target.value)
+            }
+            placeholder="Reason for recovery..."
+            disabled={busy}
+            style={{ marginBottom: "10px" }}
+          />
+
+          <button
+            type="button"
+            className="action-button btn-create"
+            disabled={busy || !recoveryReason.trim()}
+            onClick={() => {
+              if (onRecover) {
+                onRecover(recoveryReason);
+              }
+            }}
+          >
+            Recover funds
+          </button>
+        </div>
+      )}
+
       <div className="result-header">
         <div>
           <div className="result-kicker">JOB RESULT</div>
@@ -1284,6 +1331,39 @@ return () => {
   /* --------------------------------------------------
      Recovery
   -------------------------------------------------- */
+
+  async function recoverJobDirect(jobId, reason) {
+    if (busy) return;
+
+    try {
+      startAction(
+        "recoverDirect",
+        `Submitting recovery request for Job #${jobId}...`
+      );
+
+      const result = await recoverUnavailableJob(jobId, reason);
+
+      saveTransaction({
+        hash: result.hash,
+        method: "recover_unavailable_job",
+        jobId: jobId,
+      });
+
+      completeAction(
+        "recoverDirect",
+        `Recovery request submitted for Job #${jobId}.`
+      );
+
+      await refreshJobIfLookedUp(jobId);
+    } catch (error) {
+      showStatus(
+        error?.message || "Failed to recover the job.",
+        "error"
+      );
+    } finally {
+      finishAction();
+    }
+  }
 
   async function handleRecovery() {
     if (busy) return;
@@ -3158,6 +3238,10 @@ async function handleCheckBalance() {
                 <JobResult
                   jobId={lookupJobId}
                   details={jobDetails}
+                  busy={busy}
+                  onRecover={(reason) =>
+                    recoverJobDirect(lookupJobId, reason)
+                  }
                 />
               )}
             </section>
