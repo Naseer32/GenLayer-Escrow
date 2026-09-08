@@ -17,6 +17,8 @@ import {
   createMilestoneJob,
   submitMilestone,
   approveMilestone,
+  getConnectedChainId,
+  EXPECTED_CHAIN_ID,
 } from "./genlayer.js";
 
 
@@ -381,6 +383,8 @@ export default function App() {
     getConnectedAddress() || ""
   );
 
+  const [chainId, setChainId] = useState(null);
+
   const [status, setStatus] = useState(
     "Connect your wallet to start using GenLayer Escrow."
   );
@@ -593,6 +597,9 @@ return () => {
       const connected = await connectWallet();
 
       setAddress(connected);
+
+      const currentChainId = await getConnectedChainId();
+      setChainId(currentChainId);
 
       completeAction(
         "connect",
@@ -3059,6 +3066,25 @@ async function handleCheckBalance() {
                   <div className="wallet-note">
                     {address}
                   </div>
+
+                  <div className="section-label" style={{ marginTop: "12px" }}>
+                    Network
+                  </div>
+
+                  {chainId === EXPECTED_CHAIN_ID ? (
+                    <div className="badge badge-success">
+                      Connected to Studionet
+                    </div>
+                  ) : chainId === null ? (
+                    <div className="badge badge-info">
+                      Network unknown
+                    </div>
+                  ) : (
+                    <div className="badge badge-error">
+                      Wrong network (chain ID {chainId}) — switch to
+                      Studionet (61999) in your wallet
+                    </div>
+                  )}
                 </>
               ) : (
                 <div className="empty">

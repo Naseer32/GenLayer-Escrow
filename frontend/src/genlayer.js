@@ -1,6 +1,22 @@
 import { createClient } from "genlayer-js";
 import { studionet } from "genlayer-js/chains";
 
+// Studionet chain ID (per genlayer-js chain config)
+export const EXPECTED_CHAIN_ID = 61999;
+
+export async function getConnectedChainId() {
+  if (!window.ethereum) return null;
+
+  try {
+    const hexChainId = await window.ethereum.request({
+      method: "eth_chainId",
+    });
+    return parseInt(hexChainId, 16);
+  } catch {
+    return null;
+  }
+}
+
 // Deployed Freelance Escrow contract
 export const CONTRACT_ADDRESS =
   "0x69A35Ee6f9d688698A13baaF4853E281A235aa20";
