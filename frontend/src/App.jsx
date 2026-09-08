@@ -14,6 +14,9 @@ import {
   getJob,
   getContractBalance,
   getJobCount,
+  createMilestoneJob,
+  submitMilestone,
+  approveMilestone,
 } from "./genlayer.js";
 
 
@@ -389,6 +392,15 @@ export default function App() {
   const [successAction, setSuccessAction] = useState(null);
 
   const [freelancer, setFreelancer] = useState("");
+
+  const [milestoneFreelancer, setMilestoneFreelancer] = useState("");
+  const [milestoneDescriptions, setMilestoneDescriptions] = useState([""]);
+  const [milestoneAmounts, setMilestoneAmounts] = useState([""]);
+  const [milestoneSubmitJobId, setMilestoneSubmitJobId] = useState("");
+  const [milestoneSubmitIndex, setMilestoneSubmitIndex] = useState("");
+  const [milestoneDeliverable, setMilestoneDeliverable] = useState("");
+  const [milestoneApproveJobId, setMilestoneApproveJobId] = useState("");
+  const [milestoneApproveIndex, setMilestoneApproveIndex] = useState("");
   const [requirements, setRequirements] = useState("");
   const [amount, setAmount] = useState("");
 
@@ -739,6 +751,252 @@ return () => {
     } catch (error) {
       showStatus(
         error?.message || "Failed to create the job.",
+        "error"
+      );
+    } finally {
+      finishAction();
+    }
+  }
+
+  /* --------------------------------------------------
+     Create Milestone Job
+  -------------------------------------------------- */
+
+  async function handleCreateMilestoneJob() {
+    if (busy) return;
+
+    if (!milestoneFreelancer.trim()) {
+      showStatus(
+        "Enter the freelancer wallet address.",
+        "error"
+      );
+      return;
+    }
+
+    const descriptions = milestoneDescriptions.map((d) => d.trim());
+    const amounts = milestoneAmounts.map((a) => a.trim());
+
+    if (descriptions.some((d) => !d) || descriptions.length === 0) {
+      showStatus(
+        "Every milestone needs a description.",
+        "error"
+      );
+      return;
+    }
+
+    if (
+      amounts.some((a) => !a || Number(a) <= 0) ||
+      amounts.length !== descriptions.length
+    ) {
+      showStatus(
+        "Every milestone needs an amount greater than 0 GEN.",
+        "error"
+      );
+      return;
+    }
+
+    try {
+      startAction(
+        "createMilestone",
+        "Creating and funding the milestone job..."
+      );
+
+      const result = await createMilestoneJob(
+        milestoneFreelancer,
+        descriptions,
+        amounts
+      );
+
+      saveTransaction({
+        hash: result.hash,
+        method: "create_milestone_job",
+        jobId: Number(result.previousCount) + 1,
+      });
+
+      const expectedJobId = Number(result.previousCount) + 1;
+
+      showStatus(
+        `Transaction submitted. Waiting for Job #${expectedJobId} to appear...`,
+        "pending"
+      );
+
+      let found = false;
+
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        await new Promise((resolve) =>
+          window.setTimeout(resolve, 1000)
+        );
+
+        try {
+          const count = Number(await getJobCount());
+
+          if (count > Number(result.previousCount)) {
+            found = true;
+            break;
+          }
+        } catch {
+          // Continue polling.
+        }
+      }
+
+      if (found) {
+        completeAction(
+          "createMilestone",
+          `Milestone job #${expectedJobId} created and funded successfully.`
+        );
+
+        setMilestoneFreelancer("");
+        setMilestoneDescriptions([""]);
+        setMilestoneAmounts([""]);
+      } else {
+        showStatus(
+          `Transaction submitted for Job #${expectedJobId}. It is still confirming on-chain.`,
+          "pending"
+        );
+      }
+    } catch (error) {
+      showStatus(
+        error?.message || "Failed to create the milestone job.",
+        "error"
+      );
+    } finally {
+      finishAction();
+    }
+  }
+
+  function addMilestoneField() {
+    setMilestoneDescriptions((prev) => [...prev, ""]);
+    setMilestoneAmounts((prev) => [...prev, ""]);
+  }
+
+  function removeMilestoneField(index) {
+    setMilestoneDescriptions((prev) =>
+      prev.filter((_, i) => i !== index)
+    );
+    setMilestoneAmounts((prev) =>
+      prev.filter((_, i) => i !== index)
+    );
+  }
+
+  function updateMilestoneDescription(index, value) {
+    setMilestoneDescriptions((prev) => {
+      const next = [...prev];
+      next[index] = value;
+      return next;
+    });
+  }
+
+  function updateMilestoneAmount(index, value) {
+    setMilestoneAmounts((prev) => {
+      const next = [...prev];
+      next[index] = value;
+      return next;
+    });
+  }
+
+  /* --------------------------------------------------
+     Submit Milestone
+  -------------------------------------------------- */
+
+  async function handleSubmitMilestone() {
+    if (busy) return;
+
+    if (!String(milestoneSubmitJobId).trim()) {
+      showStatus("Enter the Job ID.", "error");
+      return;
+    }
+
+    if (
+      milestoneSubmitIndex === "" ||
+      Number(milestoneSubmitIndex) < 0
+    ) {
+      showStatus("Enter the milestone index.", "error");
+      return;
+    }
+
+    if (!milestoneDeliverable.trim()) {
+      showStatus("Enter the deliverable.", "error");
+      return;
+    }
+
+    try {
+      startAction(
+        "submitMilestone",
+        `Submitting milestone #${milestoneSubmitIndex} for Job #${milestoneSubmitJobId}...`
+      );
+
+      const result = await submitMilestone(
+        milestoneSubmitJobId,
+        Number(milestoneSubmitIndex),
+        milestoneDeliverable
+      );
+
+      saveTransaction({
+        hash: result.hash,
+        method: "submit_milestone",
+        jobId: Number(milestoneSubmitJobId),
+      });
+
+      completeAction(
+        "submitMilestone",
+        `Milestone #${milestoneSubmitIndex} submitted successfully.`
+      );
+
+      setMilestoneDeliverable("");
+    } catch (error) {
+      showStatus(
+        error?.message || "Failed to submit the milestone.",
+        "error"
+      );
+    } finally {
+      finishAction();
+    }
+  }
+
+  /* --------------------------------------------------
+     Approve Milestone
+  -------------------------------------------------- */
+
+  async function handleApproveMilestone() {
+    if (busy) return;
+
+    if (!String(milestoneApproveJobId).trim()) {
+      showStatus("Enter the Job ID.", "error");
+      return;
+    }
+
+    if (
+      milestoneApproveIndex === "" ||
+      Number(milestoneApproveIndex) < 0
+    ) {
+      showStatus("Enter the milestone index.", "error");
+      return;
+    }
+
+    try {
+      startAction(
+        "approveMilestone",
+        `Approving milestone #${milestoneApproveIndex} for Job #${milestoneApproveJobId}...`
+      );
+
+      const result = await approveMilestone(
+        milestoneApproveJobId,
+        Number(milestoneApproveIndex)
+      );
+
+      saveTransaction({
+        hash: result.hash,
+        method: "approve_milestone",
+        jobId: Number(milestoneApproveJobId),
+      });
+
+      completeAction(
+        "approveMilestone",
+        `Milestone #${milestoneApproveIndex} approved and paid out.`
+      );
+    } catch (error) {
+      showStatus(
+        error?.message || "Failed to approve the milestone.",
         "error"
       );
     } finally {
