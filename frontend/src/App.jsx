@@ -564,12 +564,19 @@ return () => {
     if (!jobId) return;
     if (String(lookupJobId).trim() !== String(jobId).trim()) return;
 
-    try {
-      const details = await getJob(jobId);
-      setJobDetails(details);
-    } catch {
-      // Ignore refresh errors silently; the user can still
-      // manually check status if this fails.
+    // The transaction may only just have been accepted, not yet
+    // finalized, so poll briefly rather than reading once immediately.
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      await new Promise((resolve) =>
+        window.setTimeout(resolve, 1500)
+      );
+
+      try {
+        const details = await getJob(jobId);
+        setJobDetails(details);
+      } catch {
+        // Continue polling.
+      }
     }
   }
 
