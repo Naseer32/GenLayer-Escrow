@@ -20,6 +20,7 @@ import {
   getConnectedChainId,
   EXPECTED_CHAIN_ID,
   disconnectWallet,
+  getWalletBalance,
 } from "./genlayer.js";
 
 
@@ -385,6 +386,8 @@ export default function App() {
   );
 
   const [chainId, setChainId] = useState(null);
+  const [walletBalance, setWalletBalance] = useState(null);
+  const [walletMenuOpen, setWalletMenuOpen] = useState(false);
 
   const [status, setStatus] = useState(
     "Connect your wallet to start using GenLayer Escrow."
@@ -646,10 +649,27 @@ return () => {
     disconnectWallet();
     setAddress("");
     setChainId(null);
+    setWalletBalance(null);
+    setWalletMenuOpen(false);
     showStatus(
       "Wallet disconnected. Connect a wallet to continue.",
       "info"
     );
+  }
+
+  async function handleWalletButtonClick() {
+    if (!address) {
+      await handleConnect();
+      return;
+    }
+
+    const next = !walletMenuOpen;
+    setWalletMenuOpen(next);
+
+    if (next) {
+      const bal = await getWalletBalance(address);
+      setWalletBalance(bal);
+    }
   }
 
   /* --------------------------------------------------
@@ -2207,26 +2227,65 @@ async function handleCheckBalance() {
             </div>
           </div>
 
-          <button
-            className={`wallet-button ${
-              address ? "wallet-connected" : ""
-            }`}
-            onClick={handleConnect}
-            disabled={busy}
-          >
-            <Icon
-              name={
-                activeAction === "connect"
-                  ? "loader"
-                  : "wallet"
-              }
-              size={17}
-            />
+          <div style={{ position: "relative" }}>
+            <button
+              className={`wallet-button ${
+                address ? "wallet-connected" : ""
+              }`}
+              onClick={handleWalletButtonClick}
+              disabled={busy}
+            >
+              <Icon
+                name={
+                  activeAction === "connect"
+                    ? "loader"
+                    : "wallet"
+                }
+                size={17}
+              />
 
-            {address
-              ? shortAddress(address)
-              : "Connect wallet"}
-          </button>
+              {address
+                ? shortAddress(address)
+                : "Connect wallet"}
+            </button>
+
+            {walletMenuOpen && address && (
+              <div
+                style={{
+                  position: "absolute",
+                  top: "110%",
+                  right: 0,
+                  background: "white",
+                  border: "1px solid #e2e2e2",
+                  borderRadius: "10px",
+                  padding: "12px 16px",
+                  boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
+                  minWidth: "180px",
+                  zIndex: 50,
+                }}
+              >
+                <div style={{ fontSize: "12px", color: "#888" }}>
+                  Balance
+                </div>
+                <div style={{ fontWeight: 700, fontSize: "16px" }}>
+                  {walletBalance !== null
+                    ? `${(Number(walletBalance) / 1e18).toFixed(4)} GEN`
+                    : "Loading..."}
+                </div>
+                <div
+                  style={{
+                    fontSize: "11px",
+                    color: "#aaa",
+                    marginTop: "4px",
+                  }}
+                >
+                  {chainId === EXPECTED_CHAIN_ID
+                    ? "Studionet"
+                    : `Chain ID ${chainId}`}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </header>
 

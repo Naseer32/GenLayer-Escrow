@@ -33,6 +33,20 @@ export function disconnectWallet() {
   client = null;
 }
 
+export async function getWalletBalance(address) {
+  if (!window.ethereum || !address) return null;
+
+  try {
+    const hexBalance = await window.ethereum.request({
+      method: "eth_getBalance",
+      params: [address, "latest"],
+    });
+    return BigInt(hexBalance).toString();
+  } catch {
+    return null;
+  }
+}
+
 // Connect wallet
 export async function connectWallet() {
   if (!window.ethereum) {
