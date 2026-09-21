@@ -2,11 +2,11 @@
 # { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }
 
 """
-Freelance Escrow — GenLayer Intelligent Contract
+Freelance Escrow - GenLayer Intelligent Contract
 
 Changes from v0.6.0 (steward-requested fixes):
   - Job now tracks remaining_escrow (u256), decremented by every
-    payout — whole-job or milestone — so total transfers for a
+    payout - whole-job or milestone - so total transfers for a
     job can never exceed its original deposit.
   - Whole-job actions (submit_work, approve, dispute,
     recover_unavailable_job, abandon_job) now reject any job that
@@ -84,7 +84,7 @@ class FreelanceEscrow(gl.Contract):
         """
         Whole-job actions (submit_work/approve/dispute/recovery/
         abandon) must never run on a job that uses milestone-based
-        payouts — the two routes must stay mutually exclusive or
+        payouts - the two routes must stay mutually exclusive or
         total payouts can exceed the deposit.
         """
         if len(job.milestones) > 0:
@@ -571,7 +571,7 @@ Respond with ONLY a JSON object:
         # Defense-in-depth: never pay out more than what remains.
         if int(milestone.amount) > int(job.remaining_escrow):
             raise gl.vm.UserError(
-                "milestone amount exceeds remaining escrow — refusing to pay"
+                "milestone amount exceeds remaining escrow - refusing to pay"
             )
 
         milestone.status = "resolved"
@@ -581,7 +581,7 @@ Respond with ONLY a JSON object:
         job.remaining_escrow = u256(int(job.remaining_escrow) - int(milestone.amount))
 
         # Close the job once every milestone is resolved so no
-        # further action — of either kind — can touch it.
+        # further action - of either kind - can touch it.
         all_resolved = True
         for m in job.milestones:
             if m.status != "resolved":
@@ -596,7 +596,7 @@ Respond with ONLY a JSON object:
     def abandon_milestone_job(self, job_id: u256, reason: str) -> None:
         """
         Timeout path for milestone jobs. Refunds only whatever
-        remains unclaimed (remaining_escrow) to the client — any
+        remains unclaimed (remaining_escrow) to the client - any
         milestones already approved and paid to the freelancer
         stay paid. This guarantees total transfers for the job
         never exceed its original deposit.
