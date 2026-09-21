@@ -54,7 +54,6 @@ def test_partial_payout_then_timeout_refund():
     ).transact(value=FIVE_GEN, wait_transaction_status=TransactionStatus.FINALIZED)
     assert tx_execution_succeeded(tx)
 
-    # Approve milestone 0 only — partial payout.
     contract_as_freelancer.submit_milestone(
         args=[1, 0, "Here is the design mockup"]
     ).transact(wait_transaction_status=TransactionStatus.FINALIZED)
@@ -67,10 +66,8 @@ def test_partial_payout_then_timeout_refund():
     assert job["milestones"][0]["status"] == "resolved"
     assert int(job["remaining_escrow"]) == THREE_GEN
 
-    # Wait out the (shortened, for this test build) abandonment
-    # period, then claim the timeout refund on the remainder.
     import time
-    time.sleep(150)  # adjust to match the test build's period
+    time.sleep(150)
 
     balance_before = contract.get_contract_balance().call()
 
@@ -84,8 +81,6 @@ def test_partial_payout_then_timeout_refund():
     assert tx_execution_succeeded(tx)
 
     balance_after = contract.get_contract_balance().call()
-    # Only the remaining 3 GEN should have left the contract here —
-    # not the full original 5 GEN (2 GEN already went out earlier).
     assert int(balance_before) - int(balance_after) == THREE_GEN
 
     job = contract.get_job(args=[1]).call()
@@ -154,7 +149,6 @@ def test_milestone_actions_rejected_after_job_closed():
     assert job["status"] == "resolved"
     assert int(job["remaining_escrow"]) == 0
 
-    # Any further action on this job must be rejected.
     tx = contract_as_freelancer.submit_milestone(
         args=[1, 0, "trying again"]
     ).transact(wait_transaction_status=TransactionStatus.FINALIZED)
@@ -208,15 +202,12 @@ def test_total_transfers_never_exceed_deposit():
 
     contract_balance_after_job = contract.get_contract_balance().call()
 
-    # Net effect on the contract for this job: +5 GEN in, -5 GEN
-    # out across two payouts, back to the starting balance.
     assert int(contract_balance_after_job) == int(contract_balance_before_job)
 
     job = contract.get_job(args=[1]).call()
     assert int(job["remaining_escrow"]) == 0
     assert job["status"] == "resolved"
 
-    # A further approve_milestone attempt must not pay out again.
     balance_before_extra_attempt = contract.get_contract_balance().call()
 
     tx = contract.approve_milestone(args=[1, 0]).transact(
