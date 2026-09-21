@@ -19,7 +19,7 @@ export async function getConnectedChainId() {
 
 // Deployed Freelance Escrow contract
 export const CONTRACT_ADDRESS =
-  "0x69A35Ee6f9d688698A13baaF4853E281A235aa20";
+  "0xB99c8402CE2DE1C80c3f126157fd1252c1aB5E65";
 
 let client = null;
 let connectedAddress = null;
