@@ -17,6 +17,7 @@ import {
   createMilestoneJob,
   submitMilestone,
   approveMilestone,
+  abandonMilestoneJob,
   getConnectedChainId,
   EXPECTED_CHAIN_ID,
   disconnectWallet,
@@ -1472,6 +1473,63 @@ return () => {
     } catch (error) {
       showStatus(
         error?.message || "Failed to abandon the job.",
+        "error"
+      );
+    } finally {
+      finishAction();
+    }
+  }
+
+  async function handleAbandonMilestoneJob() {
+    if (busy) return;
+
+    if (!String(abandonJobId).trim()) {
+      showStatus("Enter the Job ID.", "error");
+      return;
+    }
+
+    if (!abandonReason.trim()) {
+      showStatus(
+        "Enter an abandonment reason.",
+        "error"
+      );
+      return;
+    }
+
+    if (abandonReason.trim().length > 2000) {
+      showStatus(
+        "Abandonment reason must be 2000 characters or less.",
+        "error"
+      );
+      return;
+    }
+
+    try {
+      startAction(
+        "abandonMilestone",
+        "Submitting milestone timeout-refund request..."
+      );
+
+      const result = await abandonMilestoneJob(
+        abandonJobId,
+        abandonReason
+      );
+
+      saveTransaction({
+        hash: result.hash,
+        method: "abandon_milestone_job",
+        jobId: abandonJobId,
+      });
+
+      completeAction(
+        "abandonMilestone",
+        `Milestone timeout-refund submitted for Job #${abandonJobId}.`
+      );
+
+      await refreshJobIfLookedUp(abandonJobId);
+    } catch (error) {
+      showStatus(
+        error?.message || "Failed to abandon the milestone job.",
         "error"
       );
     } finally {
@@ -3180,7 +3238,26 @@ async function handleCheckBalance() {
                     "alert"
                   )}
                 </button>
+
+                <button
+                  className="action-button btn-abandon"
+                  onClick={handleAbandonMilestoneJob}
+                  disabled={busy || !address}
+                >
+                  {buttonContent(
+                    "abandonMilestone",
+                    "Abandon milestone job (timeout refund)",
+                    "alert"
+                  )}
+                </button>
               </div>
+
+              <p className="mini-note">
+                Use "Abandon job" for regular jobs, or "Abandon
+                milestone job" for jobs created with Create
+                Milestone Job — it refunds only whatever escrow is
+                still unclaimed, not the full original amount.
+              </p>
             </section>
           </div>
 
