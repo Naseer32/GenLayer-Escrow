@@ -27,7 +27,7 @@ import datetime
 import hashlib
 
 
-ABANDONMENT_PERIOD = datetime.timedelta(minutes=2)
+ABANDONMENT_PERIOD = datetime.timedelta(days=7)
 
 
 def _digest(content: str) -> str:
