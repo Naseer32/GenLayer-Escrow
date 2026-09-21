@@ -305,3 +305,53 @@ storage context:
   in the storage layer (`'str' object has no attribute 'to_bytes'`)
   — fixed by explicitly converting with `u256(int(amt))` before
   constructing each `Milestone`.
+
+  ---
+
+## Safety Fix: Remaining-Escrow Tracking & Route Mutual Exclusion (v0.7.0)
+
+**Vulnerability identified by steward review (Sep 13, 2026):** milestone
+jobs never transitioned `job.status` away from `"open"`, so the
+whole-job payout functions (`submit_work`, `approve`, `dispute`,
+`recover_unavailable_job`, `abandon_job`) had no awareness that a
+job was milestone-based. This meant a milestone job could still be
+pushed through the whole-job path, paying out the **full original
+amount again** on top of whatever milestones had already released -
+a real double-spend risk.
+
+**Fix:**
+- Added `Job.remaining_escrow`, decremented by every payout -
+  whole-job or milestone - so the contract always knows how much
+  of a job's deposit is actually still available.
+- Added `_reject_if_milestone_job()`, a guard on every whole-job
+  function that refuses to run if the job has any milestones. The
+  two payout routes are now mutually exclusive per job.
+- A milestone job's `status` now automatically flips to
+  `"resolved"` once every milestone is resolved, closing the job
+  to further action of any kind.
+- Added `abandon_milestone_job()` - a timeout path for milestone
+  jobs that refunds only `remaining_escrow` to the client, not the
+  full original deposit, so a partial payout followed by a timeout
+  still can't exceed what was actually deposited.
+
+### Automated Tests (`tests/test_escrow_safety.py`)
+
+All 4 tests run against live Studio consensus (not mocked):
+
+| Test | Verifies | Result |
+|---|---|---|
+| `test_whole_job_actions_rejected_on_milestone_job` | `submit_work`/`approve` refuse to run on a milestone job | PASSED |
+| `test_milestone_actions_rejected_after_job_closed` | No further action succeeds once a job fully resolves | PASSED |
+| `test_total_transfers_never_exceed_deposit` | Contract balance returns exactly to its pre-job level after all milestones pay out; a repeat approval moves zero additional GEN | PASSED |
+| `test_partial_payout_then_timeout_refund` | Approving milestone 0, then timing out on milestone 1, refunds only the 3 GEN remainder - not the full 5 GEN deposit | PASSED |
+
+The last test used a temporarily shortened `ABANDONMENT_PERIOD`
+(2 minutes) for a Studio test deployment; the version deployed to
+production uses the real 7-day period.
+
+### Production deployment
+
+Contract redeployed with this fix to:
+`0xB99c8402CE2DE1C80c3f126157fd1252c1aB5E65`
+
+`frontend/src/genlayer.js` `CONTRACT_ADDRESS` updated to match.
