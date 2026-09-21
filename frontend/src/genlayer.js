@@ -321,6 +321,31 @@ export async function abandonJob(
   });
 }
 
+export async function abandonMilestoneJob(jobId, reason) {
+  if (!String(jobId).trim()) {
+    throw new Error("Job ID is required.");
+  }
+
+  if (!reason || !reason.trim()) {
+    throw new Error("Abandonment reason is required.");
+  }
+
+  if (reason.trim().length > 2000) {
+    throw new Error(
+      "Abandonment reason must be 2000 characters or less."
+    );
+  }
+
+  return sendTransaction({
+    address: CONTRACT_ADDRESS,
+    functionName: "abandon_milestone_job",
+    args: [
+      jobId,
+      reason.trim(),
+    ],
+  });
+}
+
 export async function getContractBalance() {
   const c = getClient();
 
